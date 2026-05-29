@@ -1,24 +1,22 @@
 <template>
   <aside class="panel" v-if="device">
-    <!-- 헤더 -->
     <div class="panel-head">
       <div class="dev-title">
-        <span class="type-icon" :style="{ color: DEVICE_TYPE_COLOR[device.normalizedType ?? 'unknown'] }">
-          {{ TYPE_ICON[device.normalizedType ?? 'unknown'] }}
+        <span class="type-tag" :style="{ color: DEVICE_TYPE_COLOR[device.normalizedType ?? 'unknown'], borderColor: DEVICE_TYPE_COLOR[device.normalizedType ?? 'unknown'] }">
+          {{ DEVICE_TYPE_ABBR[device.normalizedType ?? 'unknown'] }}
         </span>
         <div>
           <div class="dev-name">{{ mapping?.displayName ?? device.hostname }}</div>
           <div class="dev-ip">{{ device.ip }}</div>
         </div>
         <span class="status-badge" :class="device.status">{{ STATUS_LABEL[device.status ?? 'unknown'] }}</span>
-        <button class="close-btn" @click="ui.select(null)">✕</button>
+        <button class="close-btn" @click="ui.select(null)" title="Close">✕</button>
       </div>
     </div>
 
     <div class="panel-body">
-      <!-- 기본 정보 -->
       <section class="section">
-        <div class="sec-title">정보</div>
+        <div class="sec-title">Info</div>
         <div class="info-grid">
           <span class="info-k">Vendor</span>  <span class="info-v">{{ device.vendor ?? '—' }}</span>
           <span class="info-k">Model</span>   <span class="info-v">{{ device.model ?? '—' }}</span>
@@ -28,7 +26,6 @@
         </div>
       </section>
 
-      <!-- 메트릭 -->
       <section class="section" v-if="device.metrics">
         <div class="sec-title">Metrics</div>
         <div v-for="m in metrics" :key="m.key" class="metric-row">
@@ -38,15 +35,14 @@
         </div>
       </section>
 
-      <!-- 인터페이스 -->
       <section class="section">
         <div class="sec-title clickable" @click="ifaceOpen = !ifaceOpen">
-          <span>인터페이스 ({{ ifaces.length }})</span>
+          <span>Interfaces ({{ ifaces.length }})</span>
           <span class="if-summary">
-            <span class="if-up">▲{{ upCount }}</span>
-            <span class="if-dn">▼{{ dnCount }}</span>
+            <span class="if-up">Up {{ upCount }}</span>
+            <span class="if-dn">Down {{ dnCount }}</span>
           </span>
-          <span class="chevron">{{ ifaceOpen ? '▲' : '▼' }}</span>
+          <span class="chevron">{{ ifaceOpen ? '−' : '+' }}</span>
         </div>
         <div v-if="ifaceOpen" class="iface-list">
           <div v-for="iface in ifaces" :key="iface.id" class="iface-row" :class="iface.status">
@@ -56,39 +52,37 @@
             <span class="if-ip">{{ iface.ip ?? '' }}</span>
             <span class="if-speed">{{ iface.speed ? iface.speed + 'M' : '' }}</span>
             <div class="if-traffic">
-              <span>↑{{ fmt(iface.trafficIn) }}</span>
-              <span>↓{{ fmt(iface.trafficOut) }}</span>
+              <span>In {{ fmt(iface.trafficIn) }}</span>
+              <span>Out {{ fmt(iface.trafficOut) }}</span>
             </div>
             <span v-if="iface.errors" class="if-err">err:{{ iface.errors }}</span>
           </div>
         </div>
       </section>
 
-      <!-- 주석 편집 (edit 모드) -->
       <section class="section" v-if="ui.mode === 'edit'">
-        <div class="sec-title">주석 편집</div>
+        <div class="sec-title">Annotation</div>
         <div class="anno-form">
-          <label>표시명
-            <input v-model="displayName" class="anno-input" placeholder="장비 별칭..." />
+          <label>Display name
+            <input v-model="displayName" class="anno-input" placeholder="Device alias" />
           </label>
-          <label>메모
+          <label>Memo
             <textarea v-model="memo" class="anno-input anno-textarea" rows="2" />
           </label>
-          <label>태그 (쉼표 구분)
-            <input v-model="tagsStr" class="anno-input" placeholder="web, db, prod..." />
+          <label>Tags (comma separated)
+            <input v-model="tagsStr" class="anno-input" placeholder="web, db, prod" />
           </label>
-          <button class="save-btn" @click="saveAnnotation">저장</button>
+          <button class="save-btn" @click="saveAnnotation">Save</button>
         </div>
       </section>
 
-      <!-- 조치 -->
       <section class="section actions">
         <div class="sec-title">Actions</div>
         <div class="action-btns">
-          <button class="act-btn isolate"  @click="isolate">격리 (Offline)</button>
-          <button class="act-btn recover"  @click="recover">복구 (Normal)</button>
+          <button class="act-btn isolate"  @click="isolate">Isolate</button>
+          <button class="act-btn recover"  @click="recover">Recover</button>
           <button class="act-btn ack"      @click="acknowledge">Acknowledge</button>
-          <button class="act-btn unmap" v-if="ui.mode === 'edit'" @click="unmapDevice">맵에서 제거</button>
+          <button class="act-btn unmap" v-if="ui.mode === 'edit'" @click="unmapDevice">Remove from map</button>
         </div>
         <div v-if="actionLog" class="action-log">{{ actionLog }}</div>
       </section>
@@ -100,7 +94,7 @@
 import { computed, ref, watch } from 'vue'
 import { useEditorStore }  from '@/stores/editor'
 import { useUIStore }      from '@/stores/ui'
-import { DEVICE_TYPE_COLOR, DEVICE_TYPE_LABEL, STATUS_LABEL, STATUS_COLOR_HEX } from '@/utils/colorUtils'
+import { DEVICE_TYPE_COLOR, DEVICE_TYPE_ABBR, STATUS_LABEL } from '@/utils/colorUtils'
 
 const editor = useEditorStore()
 const ui     = useUIStore()
@@ -111,19 +105,12 @@ const displayName = ref('')
 const memo       = ref('')
 const tagsStr    = ref('')
 
-const TYPE_ICON: Record<string, string> = {
-  server:'🖥', switch:'🔀', router:'🔁', firewall:'🛡', database:'🗄',
-  storage:'💾', vm:'📦', container:'🐳', load_balancer:'⚖', access_point:'📡',
-  cloud_service:'☁', unknown:'❓',
-}
-
 const device  = computed(() => ui.selectedDeviceId ? editor.devices.get(ui.selectedDeviceId) ?? null : null)
 const mapping = computed(() => device.value ? editor.getMappingByDeviceId(device.value.id) ?? null : null)
 const ifaces  = computed(() => device.value ? (editor.interfacesByDevice.get(device.value.id) ?? []) : [])
 const upCount = computed(() => ifaces.value.filter(i => i.status === 'up').length)
 const dnCount = computed(() => ifaces.value.filter(i => i.status === 'down').length)
 
-// 주석 초기값 동기화
 watch(mapping, m => {
   displayName.value = m?.displayName ?? ''
   memo.value        = m?.memo ?? ''
@@ -145,8 +132,8 @@ const metrics = computed(() => {
 function bar(pct: number) { return pct >= 90 ? '#ef4444' : pct >= 70 ? '#eab308' : '#22c55e' }
 function fmt(n?: number)  { if (!n) return '0'; return n >= 1000 ? `${(n/1000).toFixed(1)}G` : `${n.toFixed(0)}M` }
 
-function isolate()     { if (device.value) editor.updateDeviceStatus(device.value.id, 'offline');  actionLog.value = `[${ts()}] 격리 완료` }
-function recover()     { if (device.value) editor.updateDeviceStatus(device.value.id, 'normal');   actionLog.value = `[${ts()}] 복구 완료` }
+function isolate()     { if (device.value) editor.updateDeviceStatus(device.value.id, 'offline');  actionLog.value = `[${ts()}] Isolated` }
+function recover()     { if (device.value) editor.updateDeviceStatus(device.value.id, 'normal');   actionLog.value = `[${ts()}] Recovered` }
 function acknowledge() { if (device.value) editor.updateDeviceStatus(device.value.id, 'acknowledged'); actionLog.value = `[${ts()}] Acknowledged` }
 
 function saveAnnotation() {
@@ -156,7 +143,7 @@ function saveAnnotation() {
     memo: memo.value || undefined,
     tags: tagsStr.value ? tagsStr.value.split(',').map(t => t.trim()).filter(Boolean) : [],
   })
-  actionLog.value = `[${ts()}] 주석 저장됨`
+  actionLog.value = `[${ts()}] Annotation saved`
 }
 
 function unmapDevice() {
@@ -170,13 +157,15 @@ function ts() { return new Date().toLocaleTimeString() }
 
 <style scoped>
 .panel {
-  width: 280px; flex-shrink: 0;
-  background: rgba(8,12,24,.96); border-left: 1px solid #1a2a4a;
-  display: flex; flex-direction: column; overflow: hidden; z-index: 100;
+  width: 100%; flex-shrink: 0;
+  display: flex; flex-direction: column; overflow: hidden;
 }
 .panel-head { padding: 10px 12px; border-bottom: 1px solid #1a2a4a; }
 .dev-title  { display: flex; align-items: center; gap: 8px; }
-.type-icon  { font-size: 18px; }
+.type-tag   {
+  font-size: 10px; font-weight: 700; font-family: monospace;
+  border: 1px solid; border-radius: 4px; padding: 2px 5px; flex-shrink: 0;
+}
 .dev-name   { color: #e2e8f0; font-weight: 700; font-size: 12px; }
 .dev-ip     { color: #475569; font-family: monospace; font-size: 10px; }
 .status-badge {
@@ -206,7 +195,6 @@ function ts() { return new Date().toLocaleTimeString() }
 .m-val      { color: #94a3b8; font-size: 10px; font-family: monospace; width: 60px; text-align: right; }
 .m-val.hot  { color: #f87171; }
 
-/* 인터페이스 */
 .if-summary   { margin-left: auto; display: flex; gap: 8px; font-size: 10px; }
 .if-up        { color: #22c55e; }
 .if-dn        { color: #ef4444; }
@@ -228,7 +216,6 @@ function ts() { return new Date().toLocaleTimeString() }
 .if-traffic       { color: #94a3b8; display: flex; gap: 6px; }
 .if-err           { color: #ef4444; }
 
-/* 주석 */
 .anno-form  { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: #64748b; }
 .anno-input {
   display: block; width: 100%; margin-top: 3px;

@@ -16,7 +16,7 @@ export class SceneManager {
 
     this.renderer = new THREE.WebGLRenderer({
       canvas, antialias: true,
-      logarithmicDepthBuffer: true,   // z-fighting 완화
+      logarithmicDepthBuffer: true,
     })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
@@ -62,7 +62,6 @@ export class SceneManager {
   }
 
   private _setupGrid() {
-    // 바닥과 그리드 간격을 충분히 벌려 z-fighting 방지
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(300, 300),
       new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness: 1 }),

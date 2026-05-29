@@ -1,4 +1,3 @@
-// ─── 기초 ──────────────────────────────────────────────────────────────────
 
 export interface Vector3Like { x: number; y: number; z: number }
 export interface Size3D { width: number; height: number; depth: number }
@@ -31,7 +30,6 @@ export type EditorAction =
   | 'topology:createLink' | 'topology:updateLink' | 'topology:deleteLink'
   | 'virtualNode:create' | 'rawDevice:update'
 
-// ─── 원본 데이터 (읽기 전용) ────────────────────────────────────────────────
 
 export interface DeviceMetrics {
   cpu?: number
@@ -95,8 +93,8 @@ export interface NetworkLink {
   lastUpdatedAt?: string
   label?: string
   memo?: string
-  midX?: number    // Manhattan routing의 중간 corner X좌표 (수직선 위치)
-  midZ?: number    // Manhattan routing의 중간 corner Z좌표 (수평선 위치)
+  midX?: number
+  midZ?: number
 }
 
 // ─── Toast ──────────────────────────────────────────────────────────────────
@@ -108,7 +106,6 @@ export interface Toast {
   timestamp: number
 }
 
-// ─── 표현/편집 레이어 ────────────────────────────────────────────────────────
 
 export interface Space {
   id: string
@@ -155,7 +152,6 @@ export interface OperatorState {
   memo?: string
 }
 
-// ─── 변경 이벤트 ─────────────────────────────────────────────────────────────
 
 export type EditorChangeType =
   | 'layout.update'
@@ -277,7 +273,6 @@ export interface SavedView {
   createdAt:    string
 }
 
-// ─── 링크 생성 상태 ──────────────────────────────────────────────────────────
 
 export interface LinkDraftState {
   active: boolean

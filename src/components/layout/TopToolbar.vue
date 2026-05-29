@@ -55,6 +55,12 @@
     </div>
 
     <button class="btn" @click="toggleSim">{{ simActive ? 'Stop Sim' : 'Simulate' }}</button>
+
+    <div class="font-ctl" title="Text size">
+      <button class="fbtn" @click="ui.setFontScale(ui.fontScale - 0.05)">A−</button>
+      <button class="fbtn" @click="ui.setFontScale(ui.fontScale + 0.05)">A+</button>
+    </div>
+
     <button :class="['btn', ui.showHelp ? 'btn-on' : '']" @click="ui.showHelp = !ui.showHelp">Help</button>
   </header>
 </template>
@@ -177,4 +183,10 @@ function toggleSim() {
 }
 .tgl:hover { color: #94a3b8; background: rgba(255,255,255,.04); }
 .tgl.on    { color: #93c5fd; background: rgba(59,130,246,.14); border-color: #1e3a5a; }
+.font-ctl { display: flex; gap: 2px; flex-shrink: 0; }
+.fbtn {
+  background: #0f172a; border: 1px solid #1e3a5a; color: #94a3b8;
+  padding: 4px 8px; border-radius: 5px; font-size: 11px; cursor: pointer;
+}
+.fbtn:hover { border-color: #3b82f6; color: #e2e8f0; }
 </style>

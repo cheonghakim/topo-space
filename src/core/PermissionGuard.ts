@@ -15,17 +15,14 @@ export class PermissionGuard {
   setFeatures(features: FeatureFlags) { this.features = { ...DEFAULT_FEATURES, ...features } }
 
   can(action: EditorAction, target?: PermissionContext['target']): boolean {
-    // rawDevice:update 는 항상 거부
     if (action === 'rawDevice:update') return false
 
-    // feature flag 체크
     if (action === 'layout:update' && !this.features.layoutEdit) return false
     if (action.startsWith('space:') && !this.features.spaceEdit) return false
     if (action.startsWith('annotation:') && !this.features.annotationEdit) return false
     if (action.startsWith('topology:') && !this.features.topologyEdit) return false
     if (action === 'device:map' && !this.features.layoutEdit) return false
 
-    // view 모드에서는 편집 불가
     if (this.mode === 'view') {
       const editActions: EditorAction[] = [
         'layout:update','space:create','space:update','space:delete',

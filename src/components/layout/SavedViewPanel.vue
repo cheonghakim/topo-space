@@ -1,12 +1,12 @@
 <template>
   <div class="sv-panel">
     <div class="sv-head">
-      <span>저장된 뷰</span>
-      <button class="sv-save" @click="saveCurrentView" title="현재 뷰 저장">💾 저장</button>
-      <button class="icon-btn" @click="ui.showSavedViews = false">✕</button>
+      <span>Saved Views</span>
+      <button class="sv-save" @click="saveCurrentView" title="Save current view">Save Current</button>
+      <button class="icon-btn" @click="ui.showSavedViews = false">Close</button>
     </div>
 
-    <div v-if="!editor.savedViews.length" class="sv-empty">저장된 뷰 없음</div>
+    <div v-if="!editor.savedViews.length" class="sv-empty">No saved views</div>
 
     <div class="sv-list">
       <div v-for="view in editor.savedViews" :key="view.id" class="sv-row">
@@ -21,7 +21,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useEditorStore }  from '@/stores/editor'
 import { useUIStore }      from '@/stores/ui'
 import type { SavedView }  from '@/types'
@@ -29,16 +28,13 @@ import type { SavedView }  from '@/types'
 const editor = useEditorStore()
 const ui     = useUIStore()
 
-// 외부에서 카메라 접근을 위해 이벤트 emit
 const emit = defineEmits<{
   (e: 'load-view', view: SavedView): void
   (e: 'save-view', name: string): void
 }>()
 
-const viewName = ref('')
-
 function saveCurrentView() {
-  const name = prompt('뷰 이름을 입력하세요:', `View-${editor.savedViews.length + 1}`) ?? ''
+  const name = prompt('Enter a view name:', `View-${editor.savedViews.length + 1}`) ?? ''
   if (!name) return
   emit('save-view', name)
 }
@@ -50,10 +46,9 @@ function loadView(view: SavedView) {
 
 <style scoped>
 .sv-panel {
-  position: absolute; top: 55px; right: 8px;
-  width: 210px; background: rgba(9,13,24,.96);
-  border: 1px solid #2a4a8a; border-radius: 8px;
-  z-index: 300; overflow: hidden;
+  width: 100%; flex-shrink: 0;
+  background: rgba(9,13,24,.5);
+  border-bottom: 1px solid #1a2a4a; overflow: hidden;
 }
 .sv-head {
   display: flex; align-items: center; gap: 6px;

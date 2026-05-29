@@ -60,7 +60,7 @@ export class ParticleRenderer {
     this.posAttr.setUsage(THREE.DynamicDrawUsage)
     geo.setAttribute('position', this.posAttr)
     geo.setAttribute('color',    this.colAttr)
-    geo.setDrawRange(0, 0)   // 초기에는 그리지 않음 (origin 점 방지)
+    geo.setDrawRange(0, 0)
 
     const mat = new THREE.PointsMaterial({
       size: 0.22,
@@ -95,9 +95,7 @@ export class ParticleRenderer {
       const color   = new THREE.Color(style.color)
       const traffic = getTraffic(link.sourceDeviceId)
 
-      // 트래픽에 비례한 파티클 수 (2~6개)
       const pCount  = Math.min(Math.max(Math.floor(traffic / 150), 2), 6)
-      // 속도: 3.5 ~ 8 단위/초 (path 길이로 normalize됨)
       const baseSpd = 3.5 + Math.min(traffic / 1000, 1) * 4.5
 
       for (let i = 0; i < pCount; i++) {
@@ -125,7 +123,6 @@ export class ParticleRenderer {
       if (idx >= MAX_PARTICLES) break
       if (!visibleTypes.has(p.linkType)) continue
 
-      // path 길이로 normalize된 속도
       p.t += (p.speed * delta) / Math.max(p.totalLength, 1)
       if (p.t > 1) p.t -= 1
 

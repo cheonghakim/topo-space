@@ -4,7 +4,6 @@ import type { RawDevice, DeviceMapping, DeviceType, DeviceStatus } from '@/types
 import { STATUS_COLOR_THREE, DEVICE_TYPE_COLOR } from '@/utils/colorUtils'
 import { getDeviceGeometry } from '@/utils/geometryFactory'
 
-// 장비 타입별 재질 캐시
 const _matCache = new Map<DeviceType, THREE.MeshStandardMaterial>()
 
 function getMaterial(type: DeviceType): THREE.MeshStandardMaterial {
@@ -34,7 +33,6 @@ export class DeviceRenderer {
   private objects = new Map<string, DeviceObject3D>()
   private dummy   = new THREE.Object3D()
 
-  // 타입별 InstancedMesh (대량 렌더링)
   private instancedMeshes = new Map<DeviceType, THREE.InstancedMesh>()
   private instanceIndex   = new Map<string, { type: DeviceType; idx: number }>()
   private instanceColors  = new Map<string, THREE.Color>()
@@ -45,14 +43,12 @@ export class DeviceRenderer {
     this.scene = scene
   }
 
-  // ─── InstancedMesh 방식 (300+ 장비) ─────────────────────────────────────
 
   loadInstanced(
     devices: RawDevice[],
     mappings: Map<string, DeviceMapping>,
     getMappingByDeviceId: (id: string) => DeviceMapping | undefined,
   ) {
-    // 타입별로 그룹화
     const byType = new Map<DeviceType, { device: RawDevice; mapping: DeviceMapping }[]>()
     devices.forEach(dev => {
       const m = getMappingByDeviceId(dev.id)
@@ -143,7 +139,6 @@ export class DeviceRenderer {
     return [...this.instancedMeshes.values()]
   }
 
-  // 장비 위치 업데이트 (drag to move)
   setPosition(deviceId: string, pos: THREE.Vector3) {
     const ref  = this.instanceIndex.get(deviceId)
     if (!ref) return
@@ -156,7 +151,6 @@ export class DeviceRenderer {
     mesh.instanceMatrix.needsUpdate = true
   }
 
-  // 검색 결과에 따른 dim/highlight
   applySearchFilter(matchingIds: Set<string>, hasFilter: boolean) {
     if (!hasFilter) {
       this.dimmedIds.clear()
@@ -192,7 +186,6 @@ export class DeviceRenderer {
     })
   }
 
-  // 링크 생성 시 장비 위치 반환
   getDeviceWorldPos(deviceId: string): THREE.Vector3 | null {
     const ref  = this.instanceIndex.get(deviceId)
     if (!ref) return null

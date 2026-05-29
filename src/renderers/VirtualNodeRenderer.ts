@@ -9,11 +9,11 @@ const TYPE_COLORS: Record<string, { color: number; emissive: number }> = {
   custom:   { color: 0x22c55e, emissive: 0x001a00 },
 }
 
-const TYPE_ICONS: Record<string, string> = {
-  internet: '🌐',
-  cloud:    '☁',
-  external: '↔',
-  custom:   '◆',
+const TYPE_LABELS: Record<string, string> = {
+  internet: 'INET',
+  cloud:    'CLOUD',
+  external: 'EXT',
+  custom:   'NODE',
 }
 
 interface VNodeObj { group: THREE.Group; hitMesh: THREE.Mesh }
@@ -69,12 +69,11 @@ export class VirtualNodeRenderer {
     ring.position.y = 0.05
     group.add(ring)
 
-    // Label
     const el = document.createElement('div')
     el.style.cssText = `color:#cbd5e1;font-size:11px;font-family:monospace;
       background:rgba(9,13,24,.85);border:1px solid #2a4a8a;border-radius:5px;
       padding:2px 8px;pointer-events:none;white-space:nowrap;`
-    el.textContent = `${TYPE_ICONS[node.type] ?? '◆'} ${node.label}`
+    el.textContent = `${TYPE_LABELS[node.type] ?? 'NODE'} · ${node.label}`
     const label = new CSS2DObject(el)
     label.position.set(0, 2.5, 0)
     group.add(label)

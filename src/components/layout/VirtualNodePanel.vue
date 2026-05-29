@@ -1,19 +1,18 @@
 <template>
   <div class="vn-panel">
     <div class="vn-head">
-      <span>가상 노드</span>
-      <button class="icon-btn" @click="showAdd = !showAdd">＋</button>
-      <button class="icon-btn" @click="ui.showVirtualNodes = false">✕</button>
+      <span>Virtual Nodes</span>
+      <button class="text-btn" @click="showAdd = !showAdd">Add</button>
+      <button class="text-btn" @click="ui.showVirtualNodes = false">Close</button>
     </div>
 
     <div class="vn-list">
       <div v-for="node in vnList" :key="node.id" class="vn-row" @click="selectNode(node.id)">
-        <span class="vn-icon">{{ TYPE_ICON[node.type] }}</span>
+        <span class="vn-tag">{{ node.type.slice(0, 3).toUpperCase() }}</span>
         <span class="vn-label">{{ node.label }}</span>
-        <span class="vn-type">{{ node.type }}</span>
         <button class="del-btn" @click.stop="removeNode(node.id)">✕</button>
       </div>
-      <div v-if="!vnList.length" class="vn-empty">가상 노드 없음</div>
+      <div v-if="!vnList.length" class="vn-empty">No virtual nodes</div>
     </div>
 
     <Transition name="fade">
@@ -24,8 +23,8 @@
           <option value="external">External</option>
           <option value="custom">Custom</option>
         </select>
-        <input v-model="newLabel" class="add-input" placeholder="이름..." @keydown.enter="addNode" />
-        <button class="add-btn" @click="addNode">추가</button>
+        <input v-model="newLabel" class="add-input" placeholder="Name" @keydown.enter="addNode" />
+        <button class="add-btn" @click="addNode">Add</button>
       </div>
     </Transition>
   </div>
@@ -45,10 +44,6 @@ const showAdd  = ref(false)
 const newType  = ref<VirtualNode['type']>('internet')
 const newLabel = ref('')
 
-const TYPE_ICON: Record<string, string> = {
-  internet: '🌐', cloud: '☁', external: '↔', custom: '◆',
-}
-
 const vnList = computed(() => [...editor.virtualNodes.values()])
 
 function addNode() {
@@ -61,7 +56,7 @@ function addNode() {
     position: { x: Math.random() * 40 - 20, y: 0, z: Math.random() * 40 - 20 },
     createdAt: new Date().toISOString(),
   })
-  editor.logChange('virtualNode.create', `가상 노드 추가: ${newLabel.value}`)
+  editor.logChange('virtualNode.create', `Virtual node added: ${newLabel.value}`)
   newLabel.value = ''
   showAdd.value  = false
 }
@@ -77,9 +72,9 @@ function selectNode(id: string) {
 
 <style scoped>
 .vn-panel {
-  position: absolute; top: 55px; right: 8px;
-  width: 200px; background: rgba(9,13,24,.96);
-  border: 1px solid #2a4a8a; border-radius: 8px; z-index: 300; overflow: hidden;
+  width: 100%; flex-shrink: 0;
+  background: rgba(9,13,24,.5);
+  border-bottom: 1px solid #1a2a4a; overflow: hidden;
 }
 .vn-head {
   display: flex; align-items: center; gap: 4px;
@@ -87,14 +82,13 @@ function selectNode(id: string) {
   color: #cbd5e1; font-size: 12px; font-weight: 600;
 }
 .vn-head span { flex: 1; }
-.icon-btn { background: none; border: none; color: #64748b; cursor: pointer; }
-.icon-btn:hover { color: #e2e8f0; }
+.text-btn { background: none; border: 1px solid #1e3a5a; color: #64748b; cursor: pointer; font-size: 10px; padding: 2px 7px; border-radius: 4px; }
+.text-btn:hover { color: #e2e8f0; border-color: #3b82f6; }
 .vn-list { max-height: 180px; overflow-y: auto; }
 .vn-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,.03); cursor: pointer; font-size: 11px; }
 .vn-row:hover { background: rgba(59,130,246,.08); }
-.vn-icon  { font-size: 14px; }
+.vn-tag { font-size: 8px; font-weight: 700; font-family: monospace; color: #a78bfa; border: 1px solid #6d28d9; border-radius: 3px; padding: 1px 4px; flex-shrink: 0; }
 .vn-label { flex: 1; color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vn-type  { color: #475569; font-size: 10px; }
 .del-btn  { background: none; border: none; color: #334155; cursor: pointer; font-size: 10px; }
 .del-btn:hover { color: #ef4444; }
 .vn-empty { padding: 10px; color: #475569; font-size: 11px; text-align: center; }

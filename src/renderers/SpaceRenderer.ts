@@ -56,7 +56,6 @@ export class SpaceRenderer {
     badge.visible = space.type === 'rack' || space.type === 'site'
     group.add(badge)
 
-    // 히트 메시 (raycasting) — 랙은 바닥 패드 영역, 단 장비보다 낮게 두어 장비 클릭 우선
     const hitH = space.type === 'rack' ? 0.25 : 0.4
     const hitMesh = new THREE.Mesh(
       new THREE.BoxGeometry(size.width, hitH, size.depth),
@@ -72,7 +71,6 @@ export class SpaceRenderer {
   }
 
   private _buildRack(group: THREE.Group, _space: Space, size: Size3DLike, colors: { floor: number; edge: number }) {
-    // 장비 격자를 감싸는 낮은 바닥 패드
     const w = size.width, d = size.depth
     const pad = new THREE.Mesh(
       new THREE.BoxGeometry(w, 0.15, d),

@@ -2,14 +2,14 @@ import * as THREE from 'three'
 import type { NetworkLink, EdgeType } from '@/types'
 import { LINK_STYLE } from '@/utils/colorUtils'
 
-const LINK_Y = 0.45   // 링크가 그려지는 고정 Y높이 (장비 높이 0.4 살짝 위)
+const LINK_Y = 0.45
 
 interface LinkObj {
   group:    THREE.Group
   line:     THREE.Line
   handle:   THREE.Mesh
   link:     NetworkLink
-  path:     THREE.Vector3[]    // 4점 Manhattan path
+  path:     THREE.Vector3[]
   endpoints: { a: THREE.Vector3; b: THREE.Vector3 }
 }
 
@@ -25,9 +25,7 @@ export class LinkRenderer {
     links.forEach(l => this.addLink(l, getPos))
   }
 
-  // ── Manhattan 직각 path 생성 (핸들 (midX,midZ)를 지나는 5점) ──────────────
   // a → (ax,midZ) → (midX,midZ) → (midX,bz) → b
-  // 화면(Top-down)에서: 수직선=X축 이동, 수평선=Z축 이동, 양쪽 직각 꺾임
   private buildPath(a: THREE.Vector3, b: THREE.Vector3, midX: number, midZ: number): THREE.Vector3[] {
     return [
       new THREE.Vector3(a.x,  LINK_Y, a.z),
@@ -61,7 +59,6 @@ export class LinkRenderer {
     line.computeLineDistances()
     line.userData.linkId = link.id
 
-    // Handle (midX,midZ corner) — 드래그용
     const handleGeo = new THREE.BoxGeometry(0.55, 0.3, 0.55)
     const handleMat = new THREE.MeshBasicMaterial({
       color: 0x60a5fa, transparent: true, opacity: 0.6, depthTest: false,
@@ -71,7 +68,7 @@ export class LinkRenderer {
     handle.renderOrder = 800
     handle.userData.linkHandleId = link.id
     handle.userData.linkId       = link.id
-    handle.visible = false   // 링크 hover/선택 시만 표시
+    handle.visible = false
 
     const group = new THREE.Group()
     group.add(line, handle)
@@ -94,7 +91,6 @@ export class LinkRenderer {
     this.objects.delete(id)
   }
 
-  // 핸들 드래그 — XZ 자유 이동, 양쪽 직각 꺾임 유지
   updateMidpoint(linkId: string, newX: number, newZ: number) {
     const obj = this.objects.get(linkId)
     if (!obj) return
@@ -107,7 +103,6 @@ export class LinkRenderer {
     obj.handle.position.set(newX, LINK_Y, newZ)
   }
 
-  // 장비 이동 시 링크 endpoint 다시 가져와 path 재계산 (실시간)
   refreshPositions(getPos: (id: string) => THREE.Vector3 | null) {
     this.objects.forEach(obj => {
       const a = getPos(obj.link.sourceDeviceId)
@@ -133,7 +128,6 @@ export class LinkRenderer {
     ;(obj.line.material as THREE.LineBasicMaterial).color.set(color)
   }
 
-  // hover — 라인만 밝게 (핸들은 건드리지 않음. 선택 시에만 핸들 노출)
   setHighlight(id: string | null, prev: string | null) {
     if (prev) {
       const o = this.objects.get(prev)
@@ -145,7 +139,6 @@ export class LinkRenderer {
     }
   }
 
-  // 선택된 링크에만 드래그 핸들 표시 (서버 조작 방해 방지)
   setSelected(id: string | null) {
     this.objects.forEach((o, oid) => {
       o.handle.visible = oid === id
@@ -158,7 +151,6 @@ export class LinkRenderer {
     })
   }
 
-  // 직각(맨해튼) 프리뷰 — 링크 생성 드래그 중 표시
   showPreview(from: THREE.Vector3, to: THREE.Vector3) {
     const midZ = (from.z + to.z) / 2
     const pts: THREE.Vector3[] = [
@@ -186,22 +178,16 @@ export class LinkRenderer {
     if (this.previewLine) this.previewLine.visible = false
   }
 
-  // 애니메이션: down 펄스, traffic dash 이동
   update(delta: number) {
     this._elapsed += delta
     this.objects.forEach(({ line, link }) => {
-      const mat = line.material as THREE.LineDashedMaterial
       if (link.status === 'down') {
+        const mat = line.material as THREE.LineDashedMaterial
         mat.opacity = 0.25 + 0.35 * Math.abs(Math.sin(this._elapsed * 2.5))
-      }
-      if (link.type === 'traffic_flow') {
-        // dash 이동 효과
-        mat.dashOffset = -(this._elapsed * 0.5) % 1
       }
     })
   }
 
-  // 핸들 hit-test (linkHandleId 반환)
   pickHandle(raycaster: THREE.Raycaster): string | null {
     const handles = [...this.objects.values()].map(o => o.handle).filter(h => h.visible)
     if (!handles.length) return null
@@ -210,12 +196,10 @@ export class LinkRenderer {
     return hits[0].object.userData.linkHandleId as string | null
   }
 
-  // 모든 핸들 (raycast용)
   getAllHandles(): THREE.Mesh[] {
     return [...this.objects.values()].map(o => o.handle)
   }
 
-  // 정확한 ray-segment 최단거리 기반 pick
   pickLink(raycaster: THREE.Raycaster, threshold = 0.8): string | null {
     let best: string | null = null
     let bestSq = threshold * threshold
@@ -233,7 +217,6 @@ export class LinkRenderer {
     return best
   }
 
-  // ── Particle용 path 제공 ────────────────────────────────────────────────
   getLinkPath(linkId: string): THREE.Vector3[] | null {
     const obj = this.objects.get(linkId)
     return obj ? obj.path.map(p => p.clone()) : null

@@ -66,12 +66,6 @@ const critCount = computed(() => rackDevices.value.filter(d => d.status === 'cri
 const warnCount = computed(() => rackDevices.value.filter(d => d.status === 'warning').length)
 const normCount = computed(() => rackDevices.value.filter(d => d.status === 'normal').length)
 
-const TYPE_ICON: Record<string, string> = {
-  server:'🖥', switch:'🔀', router:'🔁', firewall:'🛡', database:'🗄',
-  storage:'💾', vm:'📦', container:'🐳', load_balancer:'⚖', access_point:'📡',
-  cloud_service:'☁', unknown:'■',
-}
-
 function selectDevice(id: string) {
   ui.select({ type: 'device', id })
 }
@@ -86,7 +80,6 @@ function close() {
 <style scoped>
 .panel {
   width: 230px; flex-shrink: 0; background: rgba(8,12,24,.96);
-  border-right: 1px solid #1a2a4a;
   display: flex; flex-direction: column; overflow: hidden; z-index: 100;
 }
 .panel-head {
@@ -112,11 +105,13 @@ function close() {
 .srv-row.critical    { background: rgba(239,68,68,.05); }
 .srv-row.warning     { background: rgba(234,179,8,.04); }
 .dot      { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.type-icon { font-size: 13px; flex-shrink: 0; }
+.type-tag {
+  font-size: 9px; font-weight: 700; font-family: monospace; flex-shrink: 0;
+  border: 1px solid; border-radius: 3px; padding: 1px 4px; min-width: 32px; text-align: center;
+}
 .srv-info  { flex: 1; min-width: 0; }
 .srv-name  { color: #cbd5e1; font-size: 11px; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .srv-ip    { color: #475569; font-size: 10px; font-family: monospace; }
 .srv-metrics { display: flex; gap: 4px; font-size: 10px; color: #64748b; font-family: monospace; flex-shrink: 0; }
 .srv-metrics .hot { color: #f87171; }
-.srv-type  { color: #334155; font-size: 9px; flex-shrink: 0; white-space: nowrap; }
 </style>

@@ -1,13 +1,12 @@
 import * as THREE from 'three'
 import type { DeviceType } from '@/types'
 
-// 장비 타입별 크기 (width × height × depth)
 const DEVICE_SIZE: Record<DeviceType, [number, number, number]> = {
   server:        [0.80, 0.12, 0.50],
   switch:        [1.00, 0.06, 0.50],
-  router:        [0.60, 0.60, 0.60],  // cylinder로 교체
+  router:        [0.60, 0.60, 0.60],
   firewall:      [0.80, 0.20, 0.50],
-  database:      [0.60, 0.60, 0.60],  // cylinder로 교체
+  database:      [0.60, 0.60, 0.60],
   storage:       [1.20, 0.30, 0.55],
   vm:            [0.60, 0.07, 0.38],
   container:     [0.45, 0.06, 0.30],

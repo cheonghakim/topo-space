@@ -8,7 +8,6 @@ import type {
 import { generateMockData } from '@/utils/mockDataGenerator'
 
 export const useEditorStore = defineStore('editor', () => {
-  // ── 원본 데이터 ──────────────────────────────────────────────────────────
   const devices    = ref<Map<string, RawDevice>>(new Map())
   const spaces     = ref<Map<string, Space>>(new Map())
   const mappings   = ref<Map<string, DeviceMapping>>(new Map())

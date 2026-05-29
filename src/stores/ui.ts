@@ -4,32 +4,25 @@ import type { SelectionTarget, EditorMode, FilterState, EdgeType, DeviceStatus, 
 import { DEFAULT_FILTER } from '@/types'
 
 export const useUIStore = defineStore('ui', () => {
-  // ── 모드 ──────────────────────────────────────────────────────────────────
   const mode = ref<EditorMode>('view')
 
-  // ── 선택/hover ────────────────────────────────────────────────────────────
   const selection  = ref<SelectionTarget | null>(null)
   const hoveredId  = ref<string | null>(null)
 
-  // ── 링크 도구 ────────────────────────────────────────────────────────────
   const linkToolActive    = ref(false)
   const linkSourceDeviceId = ref<string | null>(null)
 
-  // ── 레이어 토글 ───────────────────────────────────────────────────────────
   const visibleLinkTypes = ref<Set<EdgeType>>(new Set([
     'physical','logical','service_dependency','traffic_flow','security_path','manual','inferred',
   ]))
 
-  // ── 필터 ──────────────────────────────────────────────────────────────────
   const filter = ref<FilterState>({ ...DEFAULT_FILTER })
 
-  // ── 컨텍스트 메뉴 ─────────────────────────────────────────────────────────
   const contextMenu = ref<{
     visible: boolean; x: number; y: number
     sourceDeviceId: string; targetDeviceId: string
   }>({ visible: false, x: 0, y: 0, sourceDeviceId: '', targetDeviceId: '' })
 
-  // ── 패널 가시성 ───────────────────────────────────────────────────────────
   const showUnmapped        = ref(true)
   const showRackServerList  = ref(false)
   const selectedRackForList = ref<string | null>(null)
@@ -44,17 +37,23 @@ export const useUIStore = defineStore('ui', () => {
   const showVirtualNodes  = ref(true)
   const showHelp          = ref(false)
 
-  // 타임라인 재생 상태
+  const fontScale = ref(loadFontScale())
+  function loadFontScale(): number {
+    const v = parseFloat(localStorage.getItem('topospace.fontScale') ?? '')
+    return Number.isFinite(v) && v >= 0.8 && v <= 1.6 ? v : 1.1
+  }
+  function setFontScale(v: number) {
+    fontScale.value = Math.max(0.8, Math.min(1.6, Math.round(v * 100) / 100))
+    localStorage.setItem('topospace.fontScale', String(fontScale.value))
+  }
+
   const timelineFrameIdx = ref(-1)   // -1 = live
   const timelineRecording = ref(false)
 
-  // WebSocket 연결 상태
   const wsConnected = ref(false)
 
-  // 블라스트 반경 대상
   const blastSourceId = ref<string | null>(null)
 
-  // ── 토스트 ────────────────────────────────────────────────────────────
   const toasts = ref<Toast[]>([])
   function addToast(message: string, type: Toast['type'] = 'info') {
     const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
@@ -145,6 +144,7 @@ export const useUIStore = defineStore('ui', () => {
     showRackServerList, selectedRackForList,
     showSavedViews, showChangeLog, showTimeline, showMinimap,
     showParticles, showBlastRadius, showVirtualNodes, showHelp,
+    fontScale, setFontScale,
     timelineFrameIdx, timelineRecording, wsConnected, blastSourceId,
     tooltip,
     selectedDeviceId, selectedSpaceId, selectedLinkId,

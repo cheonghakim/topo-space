@@ -22,7 +22,6 @@ import { useUIStore }           from '@/stores/ui'
 import type { EdgeType, SavedView } from '@/types'
 import type { BlastInfo }       from '@/renderers/BlastRadiusRenderer'
 
-// ── 싱글턴 ──────────────────────────────────────────────────────────────────
 const scene   = new SceneManager()
 const perm    = new PermissionGuard({ topologyEdit: true, layoutEdit: true, spaceEdit: true, annotationEdit: true })
 const changes = new ChangeManager({})
@@ -43,15 +42,12 @@ let camera:   CameraController
 let _canvas:  HTMLCanvasElement | null = null
 let _mounted  = false
 let _startPointer = { x: 0, y: 0 }
-let _isDragCandidate = false   // mousedown 시점 드래그 후보 여부 (controls 비활성화 결정)
+let _isDragCandidate = false
 
-// gizmo 드래그 상태
 let _gizmoAxis:        GizmoAxis | null = null
-let _gizmoStartDrag:   THREE.Vector3 | null = null   // 드래그 시작 평면 교점
-let _gizmoStartPos:    THREE.Vector3 | null = null   // gizmo 시작 위치
-// 공간 이동 시 하위 장비 상대 offset
+let _gizmoStartDrag:   THREE.Vector3 | null = null
+let _gizmoStartPos:    THREE.Vector3 | null = null
 let _spaceChildren:    { id: string; offset: THREE.Vector3 }[] = []
-// WS flash용 이전 상태 추적
 const _prevStatus = new Map<string, string>()
 
 export function useNmsEditor() {
@@ -78,7 +74,6 @@ export function useNmsEditor() {
     linkDrag = new LinkDragManager(scene.camera, link, device,
       (srcId, tgtId, mx, my) => ui.showContextMenu(mx, my, srcId, tgtId))
 
-    // ── 이동 gizmo (Maya 스타일 자체 구현) ─────────────────────────────
     gizmo = new ArrowGizmo(scene.scene)
 
     editor.loadMockData()
@@ -105,7 +100,6 @@ export function useNmsEditor() {
     )
   }
 
-  // ── 이벤트 바인딩 ──────────────────────────────────────────────────────
   function _bindEvents(canvas: HTMLCanvasElement) {
     canvas.addEventListener('pointerdown',  onPointerDown)
     canvas.addEventListener('pointermove',  onPointerMove)
@@ -115,8 +109,6 @@ export function useNmsEditor() {
   }
 
   function _bindWatchers() {
-    // 장비 상태 → 3D 색상 + 변경 시 flash 효과
-    // 초기 상태 기록
     editor.devices.forEach(d => _prevStatus.set(d.id, d.status ?? 'unknown'))
     watch(
       () => { let s = ''; editor.devices.forEach(d => { s += `${d.id}:${d.status};` }); return s },
@@ -143,16 +135,13 @@ export function useNmsEditor() {
       },
     )
 
-    // 링크 변경 → 재빌드
     watch(() => editor.links.size, () => rebuildLinks())
 
-    // 링크 타입 토글
     watch(() => [...ui.visibleLinkTypes], (types) => {
       const all: EdgeType[] = ['physical','logical','service_dependency','traffic_flow','security_path','manual','inferred']
       all.forEach(t => link.setVisible(t, types.includes(t)))
     })
 
-    // hover 하이라이트
     watch(() => ui.hoveredId, (newId, oldId) => {
       if (oldId) { device.setHighlight(oldId, false); link.setHighlight(null, oldId) }
       if (newId) {
@@ -161,12 +150,10 @@ export function useNmsEditor() {
       }
     })
 
-    // 선택 변경
     watch(() => ui.selection, (sel, prev) => {
       if (prev?.type === 'space') space.setSelected(prev.id, false)
       if (prev?.type === 'link')  link.setSelected(null)
 
-      // ── Gizmo attach/detach (모드 무관 — 선택하면 항상 표시) ───────────
       if (sel && (sel.type === 'device' || sel.type === 'space')) {
         attachGizmoToSelection(sel)
       } else {
@@ -185,7 +172,6 @@ export function useNmsEditor() {
           showBlastRadius(sel.id)
         } else blast.clear()
 
-        // 그 장비의 랙도 좌측 목록에 표시
         const m = editor.getMappingByDeviceId(sel.id)
         if (m?.primarySpaceId) {
           ui.selectedRackForList = m.primarySpaceId
@@ -206,25 +192,21 @@ export function useNmsEditor() {
     })
 
 
-    // 링크 도구
     watch(() => ui.linkToolActive, (on) => {
       if (!on) linkDrag.cancel()
       if (_canvas) _canvas.style.cursor = on ? 'crosshair' : ''
-      if (on) ui.addToast('🔗 링크 도구 ON — 장비에서 다른 장비로 드래그하세요', 'info')
+      if (on) ui.addToast('Connect mode on — drag from one device to another', 'info')
     })
 
-    // 파티클 / 블라스트
     watch(() => ui.showParticles, (v) => particle.setVisible(v))
     watch(() => ui.showBlastRadius, (v) => { if (!v) blast.clear() })
 
-    // 가상 노드
     watch(() => editor.virtualNodes.size, () => {
       vnode.dispose()
       vnode = new VirtualNodeRenderer(scene.scene)
       vnode.loadNodes([...editor.virtualNodes.values()])
     })
 
-    // 타임라인
     watch(() => ui.timelineFrameIdx, (idx) => {
       if (idx < 0) return
       const frame = timeline.getFrame(idx)
@@ -232,17 +214,14 @@ export function useNmsEditor() {
       Object.entries(frame.states).forEach(([id, s]) => editor.updateDeviceStatus(id, s.status, s.metrics))
     })
 
-    // 공간 추가
     watch(() => editor.spaces.size, () => editor.spaces.forEach(s => space.addSpace(s)))
 
-    // ── 검색 필터 → 3D dim/highlight ─────────────────────────────────
     watch(
       () => `${ui.filter.search}|${ui.filter.status.join(',')}|${ui.filter.type.join(',')}`,
       () => applySearchFilter(),
     )
   }
 
-  // Y축 드래그용: gizmo 위치를 지나고 카메라를 향하는 수직 평면과 교점
   function _verticalPlanePoint(e: PointerEvent, anchor: THREE.Vector3): THREE.Vector3 | null {
     if (!_canvas) return null
     const rect = _canvas.getBoundingClientRect()
@@ -312,7 +291,6 @@ export function useNmsEditor() {
         if (d.status === 'critical') device.pulseStatus(d.id, 'critical', 0.7 * Math.abs(Math.sin(elapsed * 4.0)))
       })
 
-      // hover detection (gizmo/링크 드래그 중에는 skip)
       if (!_gizmoAxis && !linkDrag.isDrawing && !dragMove.hasPending) {
         const hit    = raycast.castHover(32)
         const newHov = hit.deviceId ?? hit.linkId ?? hit.linkHandleId ?? null
@@ -321,14 +299,12 @@ export function useNmsEditor() {
     })
   }
 
-  // ── 포인터 이벤트 ──────────────────────────────────────────────────────
   function onPointerDown(e: PointerEvent) {
     if (!_canvas) return
     _startPointer = { x: e.clientX, y: e.clientY }
     raycast.updatePointer(e, _canvas)
     _isDragCandidate = false
 
-    // ── Gizmo 축 클릭 우선 (gizmo 표시 중이면 모드 무관) ────────────────
     if (gizmo.isVisible) {
       const axis = gizmo.pickAxis(raycast.currentPointer, scene.camera)
       if (axis) {
@@ -338,7 +314,6 @@ export function useNmsEditor() {
           ? _verticalPlanePoint(e, _gizmoStartPos)
           : raycast.getGroundPoint(e, _canvas)
 
-        // 공간 이동이면 하위 장비 상대 offset 캡처
         const t = gizmo.currentTarget
         _spaceChildren = []
         if (t?.type === 'space') {
@@ -353,9 +328,8 @@ export function useNmsEditor() {
       }
     }
 
-    const hit = raycast.castClick(ui.linkToolActive)   // 링크 도구 시 device 우선
+    const hit = raycast.castClick(ui.linkToolActive)
 
-    // ── 링크 도구: 장비 위에서 드래그 시작 ───────────────────────────────
     if (ui.linkToolActive && hit.deviceId) {
       linkDrag.onMouseDown(hit.deviceId, e)
       _isDragCandidate = true
@@ -363,7 +337,6 @@ export function useNmsEditor() {
       return
     }
 
-    // ── 링크 핸들 드래그 (corner 이동, 선택된 링크에만 핸들 표시됨) ───────
     if (hit.linkHandleId) {
       dragMove.onMouseDown(hit.linkHandleId, 'linkHandle', e)
       _isDragCandidate = true
@@ -371,7 +344,6 @@ export function useNmsEditor() {
       return
     }
 
-    // device/space 이동은 gizmo가 처리. 빈 곳/객체 클릭은 카메라 회전 허용.
     scene.controls.enabled = true
   }
 
@@ -379,7 +351,6 @@ export function useNmsEditor() {
     if (!_canvas) return
     raycast.updatePointer(e, _canvas)
 
-    // ── Gizmo 축 드래그 (X/Y/Z 제한 이동) ────────────────────────────────
     if (_gizmoAxis && _gizmoStartDrag && _gizmoStartPos) {
       const cur = (_gizmoAxis === 'y')
         ? _verticalPlanePoint(e, _gizmoStartPos)
@@ -398,7 +369,6 @@ export function useNmsEditor() {
           link.refreshPositions(id => device.getDeviceWorldPos(id))
         } else if (t?.type === 'space') {
           space.setPosition(t.id, newPos)
-          // 하위 장비 동반 이동 (상대 offset 유지)
           _spaceChildren.forEach(c => device.setPosition(c.id, newPos.clone().add(c.offset)))
           link.refreshPositions(id => device.getDeviceWorldPos(id))
         }
@@ -406,13 +376,11 @@ export function useNmsEditor() {
       return
     }
 
-    // 링크 드래그
-    if (ui.linkToolActive && linkDrag.state === 'dragging') {
+    if (ui.linkToolActive && linkDrag.isDrawing) {
       linkDrag.onMouseMove(e, _canvas)
       return
     }
 
-    // 이동/핸들 드래그
     if (dragMove.hasPending) {
       const newPos = dragMove.onMouseMove(e, _canvas, scene.camera)
       if (newPos && dragMove.isDragging) {
@@ -422,7 +390,6 @@ export function useNmsEditor() {
         } else if (target.type === 'space') {
           space.setPosition(target.id!, newPos)
         } else if (target.type === 'linkHandle') {
-          // 직각 라우팅: XZ 둘 다 사용 (핸들이 자유 이동, 양쪽 직각 꺾임)
           link.updateMidpoint(target.id!, newPos.x, newPos.z)
           _syncParticles()
         }
@@ -430,7 +397,6 @@ export function useNmsEditor() {
       }
     }
 
-    // gizmo 축 위에 있으면 move 커서
     if (gizmo.isVisible && gizmo.isHovering(raycast.currentPointer, scene.camera)) {
       ui.hideTooltip()
       _canvas.style.cursor = 'move'
@@ -454,10 +420,8 @@ export function useNmsEditor() {
   function onPointerUp(e: PointerEvent) {
     if (!_canvas) return
 
-    // OrbitControls 복원
     scene.controls.enabled = true
 
-    // ── Gizmo 드래그 종료 → store 저장 ──────────────────────────────────
     if (_gizmoAxis) {
       const t   = gizmo.currentTarget
       const pos = gizmo.position
@@ -468,20 +432,19 @@ export function useNmsEditor() {
           0,
           { x: pos.x, y: pos.y, z: pos.z },
         )
-        editor.logChange('layout.update', `장비 이동: ${t.id}`)
-        ui.addToast('장비 이동 완료', 'success')
+        editor.logChange('layout.update', `Device moved: ${t.id}`)
+        ui.addToast('Device moved', 'success')
       } else if (t?.type === 'space') {
         editor.updateSpace(t.id, { position: { x: pos.x, y: pos.y, z: pos.z } })
-        // 하위 장비 위치도 store에 반영
         _spaceChildren.forEach(c => {
           const np = pos.clone().add(c.offset)
           editor.mapDevice(c.id, editor.getMappingByDeviceId(c.id)?.primarySpaceId ?? t.id, 0,
             { x: np.x, y: np.y, z: np.z })
         })
-        editor.logChange('space.update', `공간 이동: ${t.id} (+하위 ${_spaceChildren.length}대)`)
-        ui.addToast('공간 이동 완료', 'success')
+        editor.logChange('space.update', `Space moved: ${t.id} (+${_spaceChildren.length} devices)`)
+        ui.addToast('Space moved', 'success')
       }
-      // 링크는 통째 재생성 대신 위치만 갱신 (수동 라우팅 보존 + 가벼움)
+      // Refresh link positions instead of full rebuild (keeps manual routing, cheaper)
       link.refreshPositions(id => device.getDeviceWorldPos(id))
       _syncParticles()
       _gizmoAxis      = null
@@ -494,14 +457,12 @@ export function useNmsEditor() {
     raycast.updatePointer(e, _canvas)
     const hit = raycast.castClick(ui.linkToolActive)
 
-    // 링크 드래그 종료
-    if (ui.linkToolActive && linkDrag.state === 'dragging') {
+    if (ui.linkToolActive && linkDrag.isDrawing) {
       linkDrag.onMouseUp(hit.deviceId ?? null, e)
       _isDragCandidate = false
       return
     }
 
-    // 이동/핸들 드래그 종료
     if (dragMove.hasPending) {
       const result = dragMove.onMouseUp(e, _canvas, scene.camera)
       if (result) {
@@ -513,24 +474,22 @@ export function useNmsEditor() {
             0,
             { x: newPos.x, y: 0, z: newPos.z },
           )
-          editor.logChange('layout.update', `장비 이동: ${targetId}`)
-          ui.addToast(`장비 이동 완료`, 'success')
-          // 링크 path 다시 계산 (장비 위치 변경)
+          editor.logChange('layout.update', `Device moved: ${targetId}`)
+          ui.addToast(`Device moved`, 'success')
           rebuildLinks()
         } else if (targetType === 'space') {
           editor.updateSpace(targetId, { position: { x: newPos.x, y: 0, z: newPos.z } })
-          editor.logChange('space.update', `공간 이동: ${targetId}`)
-          ui.addToast(`공간 이동 완료`, 'success')
+          editor.logChange('space.update', `Space moved: ${targetId}`)
+          ui.addToast(`Space moved`, 'success')
         } else if (targetType === 'linkHandle') {
           editor.updateLink(targetId, { midX: newPos.x, midZ: newPos.z })
-          editor.logChange('topology.link.update', `링크 라우팅 변경`)
+          editor.logChange('topology.link.update', `Link routing changed`)
         }
         _isDragCandidate = false
         return
       }
     }
 
-    // 클릭으로 처리 (드래그 거리 8px 이하)
     const dx = e.clientX - _startPointer.x
     const dy = e.clientY - _startPointer.y
     if (Math.sqrt(dx * dx + dy * dy) > 8) {
@@ -539,10 +498,8 @@ export function useNmsEditor() {
     }
     _isDragCandidate = false
 
-    // ── 선택 처리 ────────────────────────────────────────────────────────
     if (hit.deviceId) {
       ui.select({ type: 'device', id: hit.deviceId })
-      // 카메라 자동 이동 제거 — 사용자가 답답해함. F키 또는 좌측 패널로 이동
     } else if (hit.spaceId) {
       ui.select({ type: 'space', id: hit.spaceId })
     } else if (hit.linkId) {
@@ -569,18 +526,18 @@ export function useNmsEditor() {
       if (!sel) return
       if (sel.type === 'device') {
         editor.unmapDevice(sel.id)
-        editor.logChange('device.unmap', `장비 제거: ${sel.id}`)
-        ui.addToast('장비 제거됨', 'info')
+        editor.logChange('device.unmap', `Device removed: ${sel.id}`)
+        ui.addToast('Device removed', 'info')
         ui.select(null)
       } else if (sel.type === 'link') {
         editor.removeLink(sel.id)
-        editor.logChange('topology.link.delete', `링크 삭제: ${sel.id}`)
-        ui.addToast('링크 삭제됨', 'info')
+        editor.logChange('topology.link.delete', `Link deleted: ${sel.id}`)
+        ui.addToast('Link deleted', 'info')
         ui.select(null)
       } else if (sel.type === 'space') {
         editor.archiveSpace(sel.id)
-        editor.logChange('space.archive', `공간 아카이브: ${sel.id}`)
-        ui.addToast('공간 아카이브됨', 'info')
+        editor.logChange('space.archive', `Space archived: ${sel.id}`)
+        ui.addToast('Space archived', 'info')
         ui.select(null)
       }
       return
@@ -633,7 +590,6 @@ export function useNmsEditor() {
       (srcId, tgtId, mx, my) => useUIStore().showContextMenu(mx, my, srcId, tgtId))
   }
 
-  // ── 외부 API ─────────────────────────────────────────────────────────
   function dropDeviceAt(deviceId: string, e: DragEvent) {
     if (!_canvas) return
     const rect = _canvas.getBoundingClientRect()
@@ -645,24 +601,31 @@ export function useNmsEditor() {
     ray.setFromCamera(ndc, scene.camera)
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
     const pt    = new THREE.Vector3()
-    if (!ray.ray.intersectPlane(plane, pt)) return
 
-    editor.mapDevice(deviceId, '', 0, { x: pt.x, y: 0, z: pt.z })
-    editor.logChange('device.map', `장비 배치: ${deviceId}`)
-    ui.addToast('장비 배치 완료', 'success')
+    const target  = scene.controls.target
+    let dropPos   = pt
+    if (!ray.ray.intersectPlane(plane, pt) || pt.distanceTo(target) > 60) {
+      dropPos = target.clone().setY(0)
+    }
+
+    editor.mapDevice(deviceId, '', 0, { x: dropPos.x, y: 0.4, z: dropPos.z })
+    editor.logChange('device.map', `Device placed: ${deviceId}`)
+    ui.addToast('Device placed', 'success')
     nextTick(() => {
       const dev = editor.devices.get(deviceId)
       const m   = editor.getMappingByDeviceId(deviceId)
-      if (dev && m?.position) device.loadInstanced([dev], editor.mappings, id => editor.getMappingByDeviceId(id))
+      if (dev && m?.position) {
+        device.loadInstanced([dev], editor.mappings, id => editor.getMappingByDeviceId(id))
+        ui.select({ type: 'device', id: deviceId })
+      }
     })
   }
 
   function confirmCreateLink(srcId: string, tgtId: string, type: EdgeType) {
-    if (!perm.can('topology:createLink')) return
     const id = `link-${Date.now()}`
     editor.addLink({ id, sourceDeviceId: srcId, targetDeviceId: tgtId, type, source: 'manual', status: 'up' })
-    editor.logChange('topology.link.create', `링크 생성: ${type}`)
-    ui.addToast(`✓ ${type} 링크 생성됨`, 'success')
+    editor.logChange('topology.link.create', `Link created: ${type}`)
+    ui.addToast(`${type} link created`, 'success')
     useUIStore().hideContextMenu()
   }
 
@@ -674,7 +637,7 @@ export function useNmsEditor() {
       createdAt:    new Date().toLocaleString(),
     }
     editor.addSavedView(view)
-    ui.addToast(`뷰 저장됨: ${name}`, 'success')
+    ui.addToast(`View saved: ${name}`, 'success')
   }
 
   function loadSavedView(view: SavedView) {
@@ -696,6 +659,17 @@ export function useNmsEditor() {
     Object.entries(frame.states).forEach(([id, s]) => editor.updateDeviceStatus(id, s.status, s.metrics))
   }
 
+  function refreshSpace(spaceId: string) {
+    const sp = editor.spaces.get(spaceId)
+    space.removeSpace(spaceId)
+    if (sp && !sp.archived) {
+      space.addSpace(sp)
+      if (ui.selection?.type === 'space' && ui.selection.id === spaceId) {
+        space.setSelected(spaceId, true)
+      }
+    }
+  }
+
   function dispose() {
     _mounted = false
     _canvas?.removeEventListener('pointerdown', onPointerDown)
@@ -712,7 +686,7 @@ export function useNmsEditor() {
     init, dispose,
     dropDeviceAt, confirmCreateLink,
     saveCurrentView, loadSavedView,
-    focusVirtualNode, onTimelineScrub,
+    focusVirtualNode, onTimelineScrub, refreshSpace,
     getScene: () => scene,
   }
 }

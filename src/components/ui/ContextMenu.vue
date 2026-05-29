@@ -7,7 +7,7 @@
         :style="{ left: ui.contextMenu.x + 'px', top: ui.contextMenu.y + 'px' }"
         @click.stop
       >
-        <div class="ctx-title">링크 타입 선택</div>
+        <div class="ctx-title">Select link type</div>
         <button
           v-for="item in LINK_TYPES"
           :key="item.type"
@@ -15,11 +15,11 @@
           :style="{ borderLeftColor: item.color }"
           @click="select(item.type)"
         >
-          <span class="ctx-icon">{{ item.icon }}</span>
+          <span class="ctx-dot" :style="{ background: item.color }" />
           <span>{{ item.label }}</span>
         </button>
         <div class="ctx-sep" />
-        <button class="ctx-item cancel" @click="ui.hideContextMenu()">✕ 취소</button>
+        <button class="ctx-item cancel" @click="ui.hideContextMenu()">Cancel</button>
       </div>
     </Transition>
   </Teleport>
@@ -34,12 +34,12 @@ import type { EdgeType }  from '@/types'
 const ui     = useUIStore()
 const { confirmCreateLink } = useNmsEditor()
 
-const LINK_TYPES: { type: EdgeType; label: string; icon: string; color: string }[] = [
-  { type: 'physical',           label: 'Physical',            icon: '━', color: '#3b82f6' },
-  { type: 'logical',            label: 'Logical',             icon: '┅', color: '#8b5cf6' },
-  { type: 'service_dependency', label: 'Service Dependency',  icon: '⟶', color: '#f59e0b' },
-  { type: 'traffic_flow',       label: 'Traffic Flow',        icon: '▶', color: '#22c55e' },
-  { type: 'security_path',      label: 'Security Path',       icon: '🔒', color: '#ef4444' },
+const LINK_TYPES: { type: EdgeType; label: string; color: string }[] = [
+  { type: 'physical',           label: 'Physical',            color: '#3b82f6' },
+  { type: 'logical',            label: 'Logical',             color: '#8b5cf6' },
+  { type: 'service_dependency', label: 'Service Dependency',  color: '#f59e0b' },
+  { type: 'traffic_flow',       label: 'Traffic Flow',        color: '#22c55e' },
+  { type: 'security_path',      label: 'Security Path',       color: '#ef4444' },
 ]
 
 function select(type: EdgeType) {
@@ -90,7 +90,7 @@ onBeforeUnmount(()  => document.removeEventListener('keydown', onKeyDown))
 }
 .ctx-item:hover { background: rgba(59,130,246,0.12); }
 .ctx-item.cancel { color: #64748b; border-left-color: transparent !important; }
-.ctx-icon { font-size: 14px; width: 18px; text-align: center; }
+.ctx-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
 .ctx-sep  { height: 1px; background: #1a2a4a; margin: 4px 0; }
 .ctx-fade-enter-active, .ctx-fade-leave-active { transition: opacity 0.1s, transform 0.1s; }
 .ctx-fade-enter-from, .ctx-fade-leave-to { opacity: 0; transform: scale(0.95); }

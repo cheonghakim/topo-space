@@ -1,7 +1,7 @@
 <template>
   <div class="mm-wrap" v-if="ui.showMinimap">
     <canvas ref="canvas" :width="W" :height="H" class="mm-canvas" />
-    <button class="mm-close" @click="ui.showMinimap = false" title="미니맵 닫기">✕</button>
+    <button class="mm-close" @click="ui.showMinimap = false" title="Close minimap">✕</button>
   </div>
 </template>
 

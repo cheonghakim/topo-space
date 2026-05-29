@@ -28,14 +28,14 @@
       </div>
     </Transition>
 
-    <!-- 링크 도구 안내 -->
     <div v-if="ui.linkToolActive" class="hint edit-hint">
-      🔗 링크 도구 | 장비에서 다른 장비로 <b>드래그</b> → 타입 선택 (직각 라우팅) · <kbd>ESC</kbd> 취소
+      Connect mode — <b>drag</b> from one device to another, then pick a link type · <kbd>ESC</kbd> to cancel
     </div>
 
-    <!-- 일반 안내 -->
     <div v-else class="hint">
-      클릭=선택 → 화살표 드래그 이동(<span style="color:#ff6b7a">X</span>/<span style="color:#5fd968">Y</span>/<span style="color:#5fb0ff">Z</span>) · 링크 선택 후 핸들 드래그 · <kbd>L</kbd>=링크 · <kbd>Del</kbd>=삭제 · <kbd>F</kbd>=전체
+      Click to select, then drag the
+      <span style="color:#ff6b7a">X</span>/<span style="color:#5fd968">Y</span>/<span style="color:#5fb0ff">Z</span>
+      arrows to move · select a link and drag its handle · <kbd>L</kbd> Connect · <kbd>Del</kbd> Delete · <kbd>F</kbd> Fit
     </div>
   </div>
 </template>

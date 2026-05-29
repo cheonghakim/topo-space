@@ -67,7 +67,7 @@ function ignoreDevice(deviceId: string) {
 <style scoped>
 .panel {
   width: 230px; flex-shrink: 0;
-  background: rgba(8,12,24,.96); border-right: 1px solid #1a2a4a;
+  background: rgba(8,12,24,.96);
   display: flex; flex-direction: column; overflow: hidden; z-index: 100;
 }
 .panel-head {

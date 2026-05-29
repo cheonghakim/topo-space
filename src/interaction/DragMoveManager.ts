@@ -9,7 +9,6 @@ interface MoveResult {
 }
 
 /**
- * Edit 모드에서 장비 / 공간을 드래그하여 위치 변경
  * mousedown → mousemove → mouseup
  */
 export class DragMoveManager {

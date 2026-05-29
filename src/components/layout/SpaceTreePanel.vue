@@ -1,82 +1,77 @@
 <template>
   <aside class="panel">
     <div class="panel-head">
-      <span>공간 트리</span>
+      <span>Spaces</span>
       <div class="head-actions">
-        <button class="icon-btn" title="공간 추가" @click="showAdd = true">＋</button>
-        <button class="icon-btn" @click="ui.showSpaceTree = false">✕</button>
+        <button class="text-btn" title="Add space" @click="showAdd = true">Add</button>
+        <button class="text-btn" @click="ui.showSpaceTree = false">Close</button>
       </div>
     </div>
 
     <div class="tree-body">
       <div v-for="site in siteTree" :key="site.id" class="site-node">
-        <!-- Site -->
         <div class="tree-row site" @click="focusSpace(site)">
-          <span class="arrow" @click.stop="toggleOpen(site.id)">{{ openNodes.has(site.id) ? '▼' : '▶' }}</span>
-          <span class="type-icon">🏢</span>
+          <span class="arrow" @click.stop="toggleOpen(site.id)">{{ openNodes.has(site.id) ? '▾' : '▸' }}</span>
+          <span class="kind-tag">SITE</span>
           <span class="node-name">{{ site.name }}</span>
           <span class="node-badge" :class="siteStatus(site.id)">{{ siteStatusLabel(site.id) }}</span>
-          <button class="row-btn" @click.stop="startEdit(site)" title="이름 변경">✏</button>
-          <button class="row-btn del" @click.stop="archiveSpace(site.id)" title="아카이브">🗑</button>
+          <button class="row-btn" @click.stop="startEdit(site)" title="Rename">Edit</button>
+          <button class="row-btn del" @click.stop="archiveSpace(site.id)" title="Archive">Del</button>
         </div>
 
-        <!-- Zones -->
         <template v-if="openNodes.has(site.id)">
           <div v-for="zone in getChildren(site.id, 'zone')" :key="zone.id" class="zone-node">
             <div class="tree-row zone" @click="focusSpace(zone)">
-              <span class="arrow" @click.stop="toggleOpen(zone.id)">{{ openNodes.has(zone.id) ? '▼' : '▶' }}</span>
-              <span class="type-icon">📦</span>
+              <span class="arrow" @click.stop="toggleOpen(zone.id)">{{ openNodes.has(zone.id) ? '▾' : '▸' }}</span>
+              <span class="kind-tag">ZONE</span>
               <span class="node-name">{{ zone.name }}</span>
-              <span class="dev-count">{{ getDeviceCount(zone.id) }}대</span>
-              <button class="row-btn" @click.stop="startEdit(zone)">✏</button>
-              <button class="row-btn del" @click.stop="archiveSpace(zone.id)">🗑</button>
+              <span class="dev-count">{{ getDeviceCount(zone.id) }}</span>
+              <button class="row-btn" @click.stop="startEdit(zone)">Edit</button>
+              <button class="row-btn del" @click.stop="archiveSpace(zone.id)">Del</button>
             </div>
 
-            <!-- Racks -->
             <template v-if="openNodes.has(zone.id)">
               <div v-for="rack in getChildren(zone.id, 'rack')" :key="rack.id">
                 <div class="tree-row rack" @click="focusSpace(rack)" :class="{ 'has-issue': rackHasIssue(rack.id) }">
-                  <span style="width:16px"/>
-                  <span class="type-icon">🗄</span>
+                  <span class="arrow-spacer" />
+                  <span class="kind-tag">RACK</span>
                   <span class="node-name">{{ rack.name }}</span>
-                  <span class="dev-count">{{ getDeviceCount(rack.id) }}U</span>
-                  <button class="row-btn" @click.stop="startEdit(rack)">✏</button>
-                  <button class="row-btn del" @click.stop="archiveSpace(rack.id)">🗑</button>
+                  <span class="dev-count">{{ getDeviceCount(rack.id) }}</span>
+                  <button class="row-btn" @click.stop="startEdit(rack)">Edit</button>
+                  <button class="row-btn del" @click.stop="archiveSpace(rack.id)">Del</button>
                 </div>
               </div>
               <div class="add-child-btn" @click="openAddChild(zone.id, 'rack')">
-                ＋ 랙 추가
+                + Add rack
               </div>
             </template>
           </div>
 
           <div class="add-child-btn" @click="openAddChild(site.id, 'zone')">
-            ＋ 존 추가
+            + Add zone
           </div>
         </template>
       </div>
 
-      <!-- Custom groups -->
       <div v-if="customGroups.length" class="site-node">
         <div class="tree-row site">
-          <span class="type-icon">◆</span>
-          <span class="node-name" style="color:#94a3b8">논리 그룹</span>
+          <span class="kind-tag">GRP</span>
+          <span class="node-name" style="color:#94a3b8">Logical Groups</span>
         </div>
         <div v-for="g in customGroups" :key="g.id" class="tree-row zone" @click="focusSpace(g)">
-          <span style="width:16px"/>
-          <span class="type-icon">◇</span>
+          <span class="arrow-spacer" />
+          <span class="kind-tag">GRP</span>
           <span class="node-name">{{ g.name }}</span>
-          <button class="row-btn del" @click.stop="archiveSpace(g.id)">🗑</button>
+          <button class="row-btn del" @click.stop="archiveSpace(g.id)">Del</button>
         </div>
       </div>
 
-      <div class="add-child-btn root" @click="showAdd = true">＋ 사이트 / 그룹 추가</div>
+      <div class="add-child-btn root" @click="showAdd = true">+ Add site / group</div>
     </div>
 
-    <!-- 공간 추가 모달 (인라인) -->
     <Transition name="fade">
       <div v-if="showAdd || addChildParentId" class="add-modal">
-        <div class="add-title">공간 추가</div>
+        <div class="add-title">Add Space</div>
         <select v-model="newType" class="add-sel">
           <option value="site">Site</option>
           <option value="zone">Zone</option>
@@ -87,22 +82,21 @@
           <option value="external">External</option>
           <option value="cloud">Cloud</option>
         </select>
-        <input v-model="newName" class="add-input" placeholder="이름..." @keydown.enter="confirmAdd" />
+        <input v-model="newName" class="add-input" placeholder="Name" @keydown.enter="confirmAdd" />
         <div class="add-btns">
-          <button class="add-ok"  @click="confirmAdd">추가</button>
-          <button class="add-cancel" @click="cancelAdd">취소</button>
+          <button class="add-ok"  @click="confirmAdd">Add</button>
+          <button class="add-cancel" @click="cancelAdd">Cancel</button>
         </div>
       </div>
     </Transition>
 
-    <!-- 이름 편집 인라인 -->
     <Transition name="fade">
       <div v-if="editingSpace" class="add-modal">
-        <div class="add-title">이름 변경</div>
+        <div class="add-title">Rename</div>
         <input v-model="editName" class="add-input" @keydown.enter="confirmEdit" />
         <div class="add-btns">
-          <button class="add-ok"  @click="confirmEdit">저장</button>
-          <button class="add-cancel" @click="editingSpace = null">취소</button>
+          <button class="add-ok"  @click="confirmEdit">Save</button>
+          <button class="add-cancel" @click="editingSpace = null">Cancel</button>
         </div>
       </div>
     </Transition>
@@ -126,8 +120,6 @@ const newType   = ref<SpaceType>('site')
 const newName   = ref('')
 const editingSpace = ref<Space | null>(null)
 const editName  = ref('')
-
-const FOCUS_FN = ref<((id: string) => void) | null>(null)
 
 const siteTree = computed(() => [...editor.spaces.values()].filter(s => s.type === 'site' && !s.archived))
 const customGroups = computed(() => [...editor.spaces.values()].filter(s =>
@@ -156,7 +148,7 @@ function siteStatus(siteId: string) {
 
 function siteStatusLabel(siteId: string) {
   const s = siteStatus(siteId)
-  return s === 'critical' ? '🔴' : s === 'warning' ? '⚠' : '●'
+  return s === 'critical' ? 'CRIT' : s === 'warning' ? 'WARN' : 'OK'
 }
 
 function toggleOpen(id: string) {
@@ -194,7 +186,7 @@ function confirmAdd() {
           { width: 50, height: 0.1, depth: 40 },
     createdAt: new Date().toISOString(),
   })
-  editor.logChange('space.create', `공간 추가: ${newName.value} (${newType.value})`)
+  editor.logChange('space.create', `Space added: ${newName.value} (${newType.value})`)
   cancelAdd()
 }
 
@@ -212,21 +204,21 @@ function startEdit(space: Space) {
 function confirmEdit() {
   if (!editingSpace.value) return
   editor.updateSpace(editingSpace.value.id, { name: editName.value })
-  editor.logChange('space.update', `공간 이름 변경: ${editName.value}`)
+  editor.logChange('space.update', `Space renamed: ${editName.value}`)
   editingSpace.value = null
 }
 
 function archiveSpace(id: string) {
-  if (!confirm('이 공간을 아카이브하시겠습니까?')) return
+  if (!confirm('Archive this space?')) return
   editor.archiveSpace(id)
-  editor.logChange('space.archive', `공간 아카이브: ${id}`)
+  editor.logChange('space.archive', `Space archived: ${id}`)
 }
 </script>
 
 <style scoped>
 .panel {
   width: 220px; flex-shrink: 0; background: rgba(8,12,24,.96);
-  border-right: 1px solid #1a2a4a; display: flex; flex-direction: column;
+  display: flex; flex-direction: column;
   overflow: hidden; z-index: 100; position: relative;
 }
 .panel-head {
@@ -234,9 +226,9 @@ function archiveSpace(id: string) {
   padding: 10px 10px; border-bottom: 1px solid #1a2a4a;
   color: #cbd5e1; font-size: 12px; font-weight: 600;
 }
-.head-actions { display: flex; gap: 4px; }
-.icon-btn { background: none; border: none; color: #64748b; cursor: pointer; font-size: 13px; }
-.icon-btn:hover { color: #e2e8f0; }
+.head-actions { display: flex; gap: 6px; }
+.text-btn { background: none; border: 1px solid #1e3a5a; color: #64748b; cursor: pointer; font-size: 10px; padding: 2px 7px; border-radius: 4px; }
+.text-btn:hover { color: #e2e8f0; border-color: #3b82f6; }
 .tree-body { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #1e3a5a transparent; }
 .tree-row {
   display: flex; align-items: center; gap: 4px;
@@ -250,12 +242,16 @@ function archiveSpace(id: string) {
 .tree-row.rack    { padding-left: 30px; }
 .tree-row.has-issue { background: rgba(239,68,68,.06); }
 .arrow    { color: #475569; font-size: 9px; width: 12px; cursor: pointer; }
-.type-icon { flex-shrink: 0; }
+.arrow-spacer { width: 12px; flex-shrink: 0; }
+.kind-tag {
+  font-size: 8px; font-weight: 700; font-family: monospace; color: #64748b;
+  border: 1px solid #334155; border-radius: 3px; padding: 1px 3px; flex-shrink: 0;
+}
 .node-name { color: #cbd5e1; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.node-badge { font-size: 12px; }
+.node-badge { font-size: 9px; font-weight: 700; }
 .node-badge.critical { color: #f87171; }
 .node-badge.warning  { color: #fbbf24; }
-.node-badge.normal   { color: #22c55e; font-size: 10px; }
+.node-badge.normal   { color: #22c55e; }
 .dev-count { color: #475569; font-size: 10px; flex-shrink: 0; }
 .row-btn   { background: none; border: none; color: #334155; cursor: pointer; font-size: 10px; opacity: 0; }
 .tree-row:hover .row-btn { opacity: 1; }

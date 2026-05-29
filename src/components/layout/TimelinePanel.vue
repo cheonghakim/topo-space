@@ -2,18 +2,17 @@
   <div class="tl-panel" v-if="ui.showTimeline">
     <div class="tl-head">
       <button :class="['tl-btn', recording ? 'rec' : '']" @click="toggleRecord">
-        {{ recording ? '⏹ 녹화 중지' : '⏺ 녹화 시작' }}
+        {{ recording ? 'Stop Recording' : 'Record' }}
       </button>
-      <span class="tl-info" v-if="frameCount > 0">{{ frameCount }}개 프레임</span>
+      <span class="tl-info" v-if="frameCount > 0">{{ frameCount }} frames</span>
       <div class="tl-spacer" />
-      <button class="tl-btn" @click="exportTimeline" title="타임라인 내보내기">📤 Export</button>
-      <button class="tl-btn" @click="exportLayout" title="레이아웃 내보내기">💾 Layout</button>
-      <button class="tl-btn" @click="triggerImport" title="레이아웃 가져오기">📂 Import</button>
+      <button class="tl-btn" @click="exportTimeline" title="Export timeline">Export Timeline</button>
+      <button class="tl-btn" @click="exportLayout" title="Export layout">Export Layout</button>
+      <button class="tl-btn" @click="triggerImport" title="Import layout">Import Layout</button>
       <input ref="fileInput" type="file" accept=".json" style="display:none" @change="onImport" />
-      <button class="icon-btn" @click="ui.showTimeline = false">✕</button>
+      <button class="text-btn" @click="ui.showTimeline = false">Close</button>
     </div>
 
-    <!-- 슬라이더 (녹화된 프레임이 있을 때) -->
     <div class="tl-slider-wrap" v-if="frameCount > 0">
       <span class="tl-label">LIVE</span>
       <input
@@ -22,12 +21,12 @@
         class="tl-slider"
         @input="onScrub"
       />
-      <span class="tl-label">{{ currentFrame?.label ?? '▶ LIVE' }}</span>
+      <span class="tl-label">{{ currentFrame?.label ?? 'LIVE' }}</span>
     </div>
 
     <div v-if="ui.timelineFrameIdx >= 0" class="tl-replay-banner">
-      ⏮ 리플레이 모드 — 실시간 업데이트 일시 정지
-      <button class="tl-btn" @click="ui.timelineFrameIdx = -1; emit('live')">▶ LIVE로 복귀</button>
+      Replay mode — real-time updates paused
+      <button class="tl-btn" @click="ui.timelineFrameIdx = -1; emit('live')">Back to LIVE</button>
     </div>
   </div>
 </template>
@@ -55,14 +54,14 @@ const currentFrame = computed(() => {
 function toggleRecord() {
   if (props.timeline.isRecording) {
     props.timeline.stopRecording()
-    editor.logChange('timeline', '타임라인 녹화 중지')
+    editor.logChange('timeline', 'Timeline recording stopped')
   } else {
     props.timeline.startRecording(() => {
       const state: Record<string, { status: any; metrics?: any }> = {}
       editor.devices.forEach(d => { state[d.id] = { status: d.status, metrics: { ...d.metrics } } })
       return state
     })
-    editor.logChange('timeline', '타임라인 녹화 시작')
+    editor.logChange('timeline', 'Timeline recording started')
   }
 }
 
@@ -78,7 +77,7 @@ function exportTimeline() {
 function exportLayout() {
   const snap = editor.exportSnapshot()
   downloadJson(JSON.stringify(snap, null, 2), `layout-${Date.now()}.json`)
-  editor.logChange('export', '레이아웃 내보내기 완료')
+  editor.logChange('export', 'Layout exported')
 }
 
 function triggerImport() {
@@ -93,8 +92,8 @@ function onImport(e: Event) {
     try {
       const snap = JSON.parse(ev.target?.result as string)
       editor.importSnapshot(snap)
-      editor.logChange('import', `레이아웃 가져오기: ${file.name}`)
-    } catch { alert('파일 형식 오류') }
+      editor.logChange('import', `Layout imported: ${file.name}`)
+    } catch { alert('Invalid file format') }
   }
   reader.readAsText(file)
 }
@@ -124,7 +123,8 @@ function downloadJson(content: string, filename: string) {
 }
 .tl-btn:hover { border-color: #3b82f6; color: #e2e8f0; }
 .tl-btn.rec   { background: #450a0a; border-color: #7f1d1d; color: #f87171; }
-.icon-btn     { background: none; border: none; color: #475569; cursor: pointer; }
+.text-btn     { background: none; border: 1px solid #1e3a5a; color: #64748b; cursor: pointer; font-size: 11px; padding: 3px 9px; border-radius: 5px; }
+.text-btn:hover { color: #e2e8f0; border-color: #3b82f6; }
 .tl-info      { color: #475569; font-size: 11px; }
 .tl-spacer    { flex: 1; }
 .tl-slider-wrap {

@@ -18,10 +18,10 @@ export function useWebSocketSim() {
   function connect() {
     if (connected.value) return
     connected.value = true
-    ui.addToast('🟢 WebSocket 연결됨 — 실시간 업데이트 시작', 'success')
-    log('WebSocket 연결')
+    ui.addToast('Live updates connected', 'success')
+    log('WebSocket connected')
 
-    // ── 장비 상태 변경 (3초 간격) ────────────────────────────────────────
+    // Device status changes
     const STATUS_POOL: DeviceStatus[] = ['normal','normal','normal','warning','critical','offline','maintenance']
     timers.push(setInterval(() => {
       const ids = [...editor.devices.keys()]
@@ -35,18 +35,18 @@ export function useWebSocketSim() {
       editor.updateDeviceStatus(id, newStatus)
 
       if (newStatus === 'critical') {
-        ui.addToast(`🔴 ${dev.hostname} → CRITICAL`, 'critical')
-        log(`🔴 CRITICAL: ${dev.hostname}`)
+        ui.addToast(`${dev.hostname} is CRITICAL`, 'critical')
+        log(`CRITICAL: ${dev.hostname}`)
       } else if (newStatus === 'warning' && oldStatus !== 'critical') {
-        ui.addToast(`⚠ ${dev.hostname} → WARNING`, 'warning')
+        ui.addToast(`${dev.hostname} is WARNING`, 'warning')
       } else if (newStatus === 'offline') {
-        ui.addToast(`⚫ ${dev.hostname} → OFFLINE`, 'warning')
+        ui.addToast(`${dev.hostname} is OFFLINE`, 'warning')
       } else if (newStatus === 'normal' && (oldStatus === 'critical' || oldStatus === 'warning')) {
-        ui.addToast(`✓ ${dev.hostname} 복구됨`, 'success')
+        ui.addToast(`${dev.hostname} recovered`, 'success')
       }
     }, 3000))
 
-    // ── 메트릭 업데이트 (1.5초) ──────────────────────────────────────────
+    // Metric updates
     timers.push(setInterval(() => {
       const ids = [...editor.devices.keys()]
       const sample = ids.slice(0, Math.min(5, ids.length))
@@ -62,7 +62,7 @@ export function useWebSocketSim() {
       })
     }, 1500))
 
-    // ── 링크 상태 (12초) ────────────────────────────────────────────────
+    // Link status changes
     timers.push(setInterval(() => {
       const linkIds = [...editor.links.keys()]
       if (!linkIds.length) return
@@ -73,15 +73,15 @@ export function useWebSocketSim() {
       if (newStatus !== link.status) {
         editor.updateLink(id, { status: newStatus as 'up' | 'down' })
         if (newStatus === 'down') {
-          ui.addToast(`🔴 링크 DOWN (${link.type})`, 'critical')
+          ui.addToast(`Link DOWN (${link.type})`, 'critical')
           log(`Link DOWN: ${link.type}`)
         } else {
-          ui.addToast(`✓ 링크 UP (${link.type})`, 'success')
+          ui.addToast(`Link UP (${link.type})`, 'success')
         }
       }
     }, 12000))
 
-    // ── 신규 장비 발견 (25초) ────────────────────────────────────────────
+    // New device discovery
     timers.push(setInterval(() => {
       if (editor.unmappedDevices.length > 8) return
       const types = ['server', 'switch', 'vm'] as const
@@ -97,8 +97,8 @@ export function useWebSocketSim() {
         syncState: 'active',
         lastSeenAt: new Date().toISOString(),
       }])
-      ui.addToast(`📡 신규 장비 발견: ${hostname}`, 'info')
-      log(`📡 NEW: ${hostname}`)
+      ui.addToast(`New device discovered: ${hostname}`, 'info')
+      log(`NEW: ${hostname}`)
     }, 25000))
   }
 
@@ -107,8 +107,8 @@ export function useWebSocketSim() {
     connected.value = false
     timers.forEach(t => clearInterval(t))
     timers = []
-    ui.addToast('⚫ WebSocket 연결 해제', 'info')
-    log('WebSocket 해제')
+    ui.addToast('Live updates disconnected', 'info')
+    log('WebSocket disconnected')
   }
 
   return { connected, eventLog, connect, disconnect }

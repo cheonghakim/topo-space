@@ -85,7 +85,6 @@ function makeDevice(
   return { device, interfaces }
 }
 
-// ─── 메인 생성 함수 ───────────────────────────────────────────────────────────
 
 export interface MockData {
   spaces: Space[]
@@ -136,8 +135,7 @@ export function generateMockData(): MockData {
         color: zi === 0 ? '#1e3a5f' : '#1a3a2a',
       })
 
-      // 3 Racks per zone — 장비를 평면 격자로 펼쳐 토폴로지처럼 표시
-      const DEV_Y    = 0.4    // 장비 높이 (평면)
+      const DEV_Y    = 0.4
       const COL_GAP  = 2.0
       const ROW_GAP  = 2.2
       for (let ri = 0; ri < 3; ri++) {
@@ -145,7 +143,6 @@ export function generateMockData(): MockData {
         const rackX = site.x + zone.dx + (ri - 1) * 8
         const rackZ = site.z
 
-        // 장비 구성
         const typeCombo: DeviceType[] = zi === 0
           ? ['switch', 'router', 'firewall', 'load_balancer', 'switch']  // network zone
           : ['switch', 'server', 'server', 'server', 'database', 'storage', 'server']  // server zone
@@ -153,7 +150,6 @@ export function generateMockData(): MockData {
         const rackDevices: { device: RawDevice; pos: { x: number; z: number } }[] = []
         const rows = Math.ceil(typeCombo.length / 2)
 
-        // 랙 영역 박스 (장비 격자를 감싸는 바닥 패드)
         spaces.push({
           id: rackId, name: `Rack-${si + 1}${zi + 1}${ri + 1}`,
           kind: 'physical', type: 'rack',
@@ -188,7 +184,6 @@ export function generateMockData(): MockData {
           })
         })
 
-        // 랙 내 링크: 스위치를 허브로 나머지 장비 각각 연결 (star topology)
         const hub = rackDevices.find(d => d.device.normalizedType === 'switch')
         if (hub) {
           rackDevices.forEach(d => {
@@ -208,12 +203,10 @@ export function generateMockData(): MockData {
       }
     })
 
-    // 존 간 연결 (net-zone switch → srv-zone switch)
     const netRacks = spaces.filter(s => s.type === 'rack' && s.parentId?.includes('zone-net') && s.parentId.startsWith(site.id))
     const srvRacks = spaces.filter(s => s.type === 'rack' && s.parentId?.includes('zone-srv') && s.parentId.startsWith(site.id))
 
     if (netRacks[0] && srvRacks[0]) {
-      // 두 zone 첫 번째 랙의 switch끼리 연결
       const netSwitch = devices.find(d => d.normalizedType === 'switch' && deviceMappings.find(m => m.rawDeviceId === d.id && m.primarySpaceId === netRacks[0].id))
       const srvSwitch = devices.find(d => d.normalizedType === 'switch' && deviceMappings.find(m => m.rawDeviceId === d.id && m.primarySpaceId === srvRacks[0].id))
       if (netSwitch && srvSwitch) {
@@ -231,7 +224,6 @@ export function generateMockData(): MockData {
     }
   })
 
-  // 사이트 간 논리 연결 (Cloud ↔ Seoul)
   const seoulRouter  = devices.find(d => d.normalizedType === 'router' && d.siteId === 'site-seoul')
   const cloudService = devices.find(d => d.normalizedType === 'router' && d.siteId === 'site-cloud')
   if (seoulRouter && cloudService) {
@@ -246,7 +238,6 @@ export function generateMockData(): MockData {
     })
   }
 
-  // 미매핑 장비 5개 (Unmapped Queue용)
   const unmappedDevices: RawDevice[] = []
   const unmappedTypes: DeviceType[] = ['server', 'switch', 'firewall', 'server', 'database']
   unmappedTypes.forEach((type, i) => {

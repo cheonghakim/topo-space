@@ -8,13 +8,13 @@
           <div class="link-src">{{ srcName }} → {{ tgtName }}</div>
         </div>
         <span class="status-dot" :class="link.status" />
-        <button class="close-btn" @click="ui.select(null)">✕</button>
+        <button class="close-btn" @click="ui.select(null)" title="Close">✕</button>
       </div>
     </div>
 
     <div class="panel-body">
       <section class="section">
-        <div class="sec-title">링크 정보</div>
+        <div class="sec-title">Link Info</div>
         <div class="info-grid">
           <span class="k">Type</span>       <span class="v">{{ LINK_LABEL[link.type] }}</span>
           <span class="k">Status</span>     <span class="v" :class="`s-${link.status}`">{{ link.status ?? 'unknown' }}</span>
@@ -25,8 +25,8 @@
         </div>
       </section>
 
-      <section class="section" v-if="ui.mode === 'edit' && link.source === 'manual'">
-        <div class="sec-title">편집</div>
+      <section class="section" v-if="link.source === 'manual'">
+        <div class="sec-title">Edit</div>
         <div class="edit-form">
           <label>Status
             <select v-model="editStatus" class="sel">
@@ -38,8 +38,8 @@
           <label>Label
             <input v-model="editLabel" class="inp" />
           </label>
-          <button class="save-btn" @click="save">적용</button>
-          <button class="del-btn" @click="deleteLink">삭제</button>
+          <button class="save-btn" @click="save">Apply</button>
+          <button class="del-btn" @click="deleteLink">Delete</button>
         </div>
       </section>
     </div>
@@ -86,9 +86,8 @@ function deleteLink() {
 
 <style scoped>
 .panel {
-  width: 240px; flex-shrink: 0;
-  background: rgba(8,12,24,.96); border-left: 1px solid #1a2a4a;
-  display: flex; flex-direction: column; z-index: 100;
+  width: 100%; flex-shrink: 0;
+  display: flex; flex-direction: column;
 }
 .panel-head   { padding: 10px 12px; border-bottom: 1px solid #1a2a4a; }
 .link-title   { display: flex; align-items: center; gap: 8px; }

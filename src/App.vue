@@ -3,20 +3,19 @@
     <TopToolbar />
 
     <div class="workspace">
-      <!-- 좌측 패널들 (우선순위: 랙서버목록 > SpaceTree > Unmapped)
-           트랜지션 제거 — 컨테이너 1개에 swap 시 layout 압축 방지 -->
-      <RackServerListPanel v-if="ui.showRackServerList" />
-      <SpaceTreePanel      v-else-if="ui.showSpaceTree" />
-      <UnmappedPanel       v-else-if="ui.showUnmapped" />
+      <!-- Left dock: device / space sources -->
+      <aside class="left-dock" v-if="hasLeftPanel">
+        <RackServerListPanel v-if="ui.showRackServerList" />
+        <SpaceTreePanel      v-else-if="ui.showSpaceTree" />
+        <UnmappedPanel       v-else-if="ui.showUnmapped" />
+      </aside>
 
-      <!-- 중앙 3D 캔버스 -->
       <div class="canvas-wrap" ref="canvasWrap">
         <SceneCanvas
           ref="sceneRef"
           @scene-ready="onSceneReady"
         />
 
-        <!-- 미니맵 (씬 준비 후) -->
         <MinimapPanel
           v-if="sceneReady && ui.showMinimap"
           :camera="currentCamera"
@@ -24,12 +23,22 @@
         />
       </div>
 
-      <!-- 우측 패널 (장비/링크 상세) -->
-      <DeviceDetailPanel v-if="ui.selectedDeviceId" />
-      <LinkPropertyPanel v-else-if="ui.selectedLinkId" />
+      <!-- Right dock: contextual detail + tool panels, stacked -->
+      <aside class="right-dock" v-if="hasRightPanel">
+        <DeviceDetailPanel  v-if="ui.selectedDeviceId" />
+        <LinkPropertyPanel  v-else-if="ui.selectedLinkId" />
+        <SpacePropertyPanel v-else-if="ui.selectedSpaceId" />
+
+        <SavedViewPanel
+          v-if="ui.showSavedViews"
+          @save-view="onSaveView"
+          @load-view="onLoadView"
+        />
+        <ChangeLogPanel   v-if="ui.showChangeLog" />
+        <VirtualNodePanel v-if="ui.showVirtualNodes" @select-node="onSelectVNode" />
+      </aside>
     </div>
 
-    <!-- 타임라인 / Import-Export 바 -->
     <TimelinePanel
       v-if="ui.showTimeline"
       :timeline="timeline"
@@ -37,40 +46,31 @@
       @live="ui.timelineFrameIdx = -1"
     />
 
-    <!-- 플로팅 패널들 -->
-    <SavedViewPanel
-      v-if="ui.showSavedViews"
-      @save-view="onSaveView"
-      @load-view="onLoadView"
-    />
-    <ChangeLogPanel    v-if="ui.showChangeLog" />
-    <VirtualNodePanel  v-if="ui.showVirtualNodes" @select-node="onSelectVNode" />
-
-    <!-- 컨텍스트 메뉴 (링크 타입 선택) -->
     <ContextMenu />
 
-    <!-- 토스트 알림 -->
     <ToastPanel />
 
-    <!-- Blast Radius 배너 -->
+    <HelpPanel />
+
     <Transition name="fade">
       <div v-if="ui.blastSourceId" class="blast-banner">
-        ⚡ 장애 영향 범위 표시 중
+        Impact radius
         <span class="blast-id">{{ blastDeviceName }}</span>
-        <button class="blast-close" @click="ui.blastSourceId = null; ui.select(null)">✕</button>
+        <button class="blast-close" @click="ui.blastSourceId = null; ui.select(null)">Close</button>
       </div>
     </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import TopToolbar          from '@/components/layout/TopToolbar.vue'
 import RackServerListPanel from '@/components/layout/RackServerListPanel.vue'
 import SpaceTreePanel    from '@/components/layout/SpaceTreePanel.vue'
 import UnmappedPanel     from '@/components/layout/UnmappedPanel.vue'
 import DeviceDetailPanel from '@/components/layout/DeviceDetailPanel.vue'
 import LinkPropertyPanel from '@/components/layout/LinkPropertyPanel.vue'
+import SpacePropertyPanel from '@/components/layout/SpacePropertyPanel.vue'
 import SavedViewPanel    from '@/components/layout/SavedViewPanel.vue'
 import ChangeLogPanel    from '@/components/layout/ChangeLogPanel.vue'
 import VirtualNodePanel  from '@/components/layout/VirtualNodePanel.vue'
@@ -79,6 +79,7 @@ import MinimapPanel      from '@/components/layout/MinimapPanel.vue'
 import SceneCanvas       from '@/components/scene/SceneCanvas.vue'
 import ContextMenu       from '@/components/ui/ContextMenu.vue'
 import ToastPanel        from '@/components/ui/ToastPanel.vue'
+import HelpPanel         from '@/components/ui/HelpPanel.vue'
 import { useUIStore }    from '@/stores/ui'
 import { useEditorStore } from '@/stores/editor'
 import { useNmsEditor, timeline } from '@/composables/useNmsEditor'
@@ -109,6 +110,17 @@ const blastDeviceName = computed(() => {
   const dev = editor.devices.get(ui.blastSourceId ?? '')
   return dev?.hostname ?? ui.blastSourceId
 })
+
+const hasLeftPanel = computed(() =>
+  ui.showRackServerList || ui.showSpaceTree || ui.showUnmapped)
+
+const hasRightPanel = computed(() =>
+  !!ui.selectedDeviceId || !!ui.selectedLinkId || !!ui.selectedSpaceId ||
+  ui.showSavedViews || ui.showChangeLog || ui.showVirtualNodes)
+
+watch(() => ui.fontScale, (v) => {
+  document.documentElement.style.setProperty('--ui-fs', String(v))
+}, { immediate: true })
 </script>
 
 <style>
@@ -119,6 +131,13 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #080c18; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #1e3a5a; border-radius: 3px; }
 select option { background: #0f172a; color: #e2e8f0; }
+
+/* User-adjustable UI text scale (canvas and pointer-anchored overlays excluded). */
+.toolbar,
+.left-dock,
+.right-dock,
+.tl-panel,
+.help-modal { zoom: var(--ui-fs, 1.1); }
 </style>
 
 <style scoped>
@@ -130,6 +149,23 @@ select option { background: #0f172a; color: #e2e8f0; }
 }
 .workspace { display: flex; flex: 1; overflow: hidden; }
 .canvas-wrap { flex: 1; position: relative; min-width: 0; }
+
+.left-dock {
+  flex: 0 0 auto;
+  display: flex;
+  border-right: 1px solid #1a2a4a;
+  background: rgba(8, 12, 24, 0.96);
+}
+.right-dock {
+  flex: 0 0 290px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-left: 1px solid #1a2a4a;
+  background: rgba(8, 12, 24, 0.96);
+}
+.right-dock::-webkit-scrollbar { width: 5px; }
 
 .fade-enter-active, .fade-leave-active { transition: opacity .2s; }
 .fade-enter-from, .fade-leave-to       { opacity: 0; }

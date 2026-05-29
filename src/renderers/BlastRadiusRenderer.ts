@@ -78,13 +78,9 @@ export class BlastRadiusRenderer {
     this.rings.forEach(r => {
       const mat = r.mesh.material as THREE.MeshBasicMaterial
       const base = r.hop === 1 ? 0.7 : 0.4
-      // Pulse between base opacity and lower
       mat.opacity = base * (0.5 + 0.5 * Math.abs(Math.sin(this.elapsed * 2.5)))
-      // Slow scale pulse on outer rings (every other one)
-      if (r.rings) {
-        const s = 1 + 0.15 * Math.abs(Math.sin(this.elapsed * 1.8))
-        r.mesh.scale.setScalar(s)
-      }
+      const s = 1 + 0.15 * Math.abs(Math.sin(this.elapsed * 1.8))
+      r.mesh.scale.setScalar(s)
     })
   }
 

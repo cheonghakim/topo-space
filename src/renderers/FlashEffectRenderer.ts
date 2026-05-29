@@ -15,8 +15,6 @@ interface Flash {
 }
 
 /**
- * WS 상태 변경 시 장비 위에 퍼지는 ring 펄스.
- * 장애 발생=빨강, 복구=초록, 경고=노랑.
  */
 export class FlashEffectRenderer {
   private scene: THREE.Scene
@@ -28,7 +26,6 @@ export class FlashEffectRenderer {
     const color = FLASH_COLOR[kind]
     const rings: THREE.Mesh[] = []
 
-    // 2겹 ring (시차)
     for (let i = 0; i < 2; i++) {
       const geo = new THREE.RingGeometry(0.3, 0.45, 32)
       const mat = new THREE.MeshBasicMaterial({
@@ -45,7 +42,6 @@ export class FlashEffectRenderer {
       rings.push(ring)
     }
 
-    // 수직 빔 (짧은 광선)
     const beamGeo = new THREE.CylinderGeometry(0.06, 0.06, 4, 6)
     const beamMat = new THREE.MeshBasicMaterial({
       color, transparent: true, opacity: 0.6,
@@ -65,7 +61,7 @@ export class FlashEffectRenderer {
     for (let i = this.flashes.length - 1; i >= 0; i--) {
       const f = this.flashes[i]
       f.life -= delta
-      const t = 1 - f.life / f.maxLife   // 0→1 진행도
+      const t = 1 - f.life / f.maxLife
 
       f.rings.forEach(ring => {
         const mat = ring.material as THREE.MeshBasicMaterial

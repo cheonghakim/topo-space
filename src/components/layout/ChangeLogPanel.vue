@@ -1,12 +1,12 @@
 <template>
   <div class="cl-panel">
     <div class="cl-head">
-      <span>변경 이력</span>
-      <button class="cl-clear" @click="editor.changeLog.splice(0)">지우기</button>
-      <button class="icon-btn" @click="ui.showChangeLog = false">✕</button>
+      <span>Change Log</span>
+      <button class="cl-clear" @click="editor.changeLog.splice(0)">Clear</button>
+      <button class="icon-btn" @click="ui.showChangeLog = false">Close</button>
     </div>
 
-    <div v-if="!editor.changeLog.length" class="cl-empty">변경 이력 없음</div>
+    <div v-if="!editor.changeLog.length" class="cl-empty">No changes yet</div>
 
     <div class="cl-list">
       <div v-for="entry in editor.changeLog" :key="entry.id" class="cl-row">
@@ -35,10 +35,10 @@ function entryClass(type: string) {
 
 <style scoped>
 .cl-panel {
-  position: absolute; top: 55px; right: 8px;
-  width: 280px; background: rgba(9,13,24,.96);
-  border: 1px solid #2a4a8a; border-radius: 8px;
-  z-index: 300; overflow: hidden; max-height: 340px; display: flex; flex-direction: column;
+  width: 100%; flex-shrink: 0;
+  background: rgba(9,13,24,.5);
+  border-bottom: 1px solid #1a2a4a;
+  overflow: hidden; max-height: 320px; display: flex; flex-direction: column;
 }
 .cl-head {
   display: flex; align-items: center; gap: 6px;
@@ -46,7 +46,8 @@ function entryClass(type: string) {
   color: #cbd5e1; font-size: 12px; font-weight: 600; flex-shrink: 0;
 }
 .cl-clear  { background: transparent; border: 1px solid #334155; color: #64748b; padding: 2px 7px; border-radius: 4px; font-size: 10px; cursor: pointer; }
-.icon-btn  { background: none; border: none; color: #475569; cursor: pointer; margin-left: auto; }
+.icon-btn  { background: none; border: 1px solid #1e3a5a; color: #64748b; cursor: pointer; font-size: 10px; padding: 2px 7px; border-radius: 4px; }
+.icon-btn:hover { color: #e2e8f0; border-color: #3b82f6; }
 .cl-empty  { padding: 12px; color: #475569; font-size: 11px; text-align: center; }
 .cl-list   { overflow-y: auto; scrollbar-width: thin; }
 .cl-row    { display: grid; grid-template-columns: 90px 1fr auto; gap: 4px; align-items: baseline; padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,.03); font-size: 10px; }
