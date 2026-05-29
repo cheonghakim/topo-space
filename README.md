@@ -1,6 +1,11 @@
+<!-- keywords: network topology editor, vue3 threejs 3d visualization, NMS UI component, topology viewer, network diagram, infrastructure map, vue network map, 네트워크 토폴로지 에디터, 네트워크 맵 뷰어, 3D 네트워크 다이어그램 -->
 # Topospace
 
 3D network topology editor built on Vue 3 + Three.js. Drop it into any Vue app with a single function call — `createNmsEditor` mounts the full scene, panels, and toolbar into whatever container you hand it.
+
+[![npm version](https://img.shields.io/npm/v/topospace)](https://www.npmjs.com/package/topospace)
+[![License](https://img.shields.io/npm/l/topospace)](https://github.com/cheonghakim/topo-space/blob/main/LICENSE)
+[![Bundle size](https://img.shields.io/bundlephobia/minzip/topospace)](https://bundlephobia.com/package/topospace)
 
 **[Live demo →](https://cheonghakim.github.io/topo-space/)**
 
@@ -346,6 +351,26 @@ npm run docs:api     # generate TypeDoc into docs/api/
 
 ## 한국어 가이드
 
+Vue 3 + Three.js 기반 3D 네트워크 토폴로지 에디터. `createNmsEditor` 함수 하나로 Vue 앱 어디서든 씬, 패널, 툴바를 원하는 컨테이너에 마운트할 수 있습니다.
+
+**[라이브 데모 →](https://cheonghakim.github.io/topo-space/)**
+
+---
+
+**목차**
+
+- [설치](#설치)
+- [빠른 시작](#빠른-시작)
+- [설정](#설정-editoroptions)
+- [NmsEditor 메서드](#nmseditor-메서드)
+- [데이터 모델](#데이터-모델)
+- [키보드 단축키](#키보드-단축키)
+- [Shadow DOM](#shadow-dom-1)
+- [CSV / XLSX 임포트 형식](#csv--xlsx-임포트-형식)
+- [개발](#개발)
+
+---
+
 ### 설치
 
 ```bash
@@ -679,5 +704,3 @@ npm run test:unit    # vitest
 npm run test:e2e     # playwright (개발 서버 자동 시작)
 npm run docs:api     # TypeDoc → docs/api/
 ```
-
-라이브 데모: **https://cheonghakim.github.io/topo-space/**

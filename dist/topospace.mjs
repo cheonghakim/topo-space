@@ -3255,7 +3255,7 @@ var ai = class {
 	}
 	shouldShowBadge(e, t) {
 		let n = this.objects.size;
-		return e === "site" ? !0 : e === "rack" && t === "import" || n > 120 ? !1 : n > 60 ? e !== "rack" : e === "zone" || e === "cloud";
+		return e === "site" ? !0 : e === "rack" && t === "import" || n > 120 ? !1 : n > 60 ? e !== "rack" : e === "rack" || e === "zone" || e === "cloud";
 	}
 	dispose() {
 		this.objects.forEach((e) => this.disposeSpaceObject(e)), this.objects.clear();
