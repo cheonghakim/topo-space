@@ -23,9 +23,16 @@
   "sideEffects": [
     "**/*.css"
   ],
+  "author": "cheonghakim",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cheonghakim/topo-space"
+  },
+  "homepage": "https://cheonghakim.github.io/topo-space",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
+    "build:demo": "vite build --config vite.demo.config.ts",
     "preview": "vite preview",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
