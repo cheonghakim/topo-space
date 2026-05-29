@@ -10,9 +10,21 @@ export class SceneManager {
   controls!:      OrbitControls
   private _animId = 0
   private _wrapper!: HTMLElement
+  private _canvas!: HTMLCanvasElement
+  private _overlayEl!: HTMLElement
+  private _onError?: (error: Error, context?: Record<string, unknown>) => void
+  private _resizeObserver?: ResizeObserver
 
-  init(canvas: HTMLCanvasElement, overlayEl: HTMLElement, wrapper: HTMLElement) {
+  init(
+    canvas: HTMLCanvasElement,
+    overlayEl: HTMLElement,
+    wrapper: HTMLElement,
+    callbacks: { onError?: (error: Error, context?: Record<string, unknown>) => void } = {},
+  ) {
     this._wrapper = wrapper
+    this._canvas = canvas
+    this._overlayEl = overlayEl
+    this._onError = callbacks.onError
 
     this.renderer = new THREE.WebGLRenderer({
       canvas, antialias: true,
@@ -44,7 +56,11 @@ export class SceneManager {
     this._setupLights()
     this._setupGrid()
     this.resize()
-    window.addEventListener('resize', () => this.resize())
+    window.addEventListener('resize', this.resize)
+    this._resizeObserver = new ResizeObserver(() => this.resize())
+    this._resizeObserver.observe(wrapper)
+    canvas.addEventListener('webglcontextlost', this.onWebglContextLost)
+    canvas.addEventListener('webglcontextrestored', this.onWebglContextRestored)
   }
 
   private _setupLights() {
@@ -76,7 +92,7 @@ export class SceneManager {
     this.scene.add(grid)
   }
 
-  resize() {
+  resize = () => {
     const w = this._wrapper?.clientWidth  || window.innerWidth
     const h = this._wrapper?.clientHeight || window.innerHeight
     this.camera.aspect = w / h
@@ -85,23 +101,40 @@ export class SceneManager {
     this.css2dRenderer.setSize(w, h)
   }
 
+  private onWebglContextLost = (event: Event) => {
+    event.preventDefault()
+    cancelAnimationFrame(this._animId)
+    this._onError?.(new Error('WebGL context lost'), { phase: 'webglcontextlost' })
+  }
+
+  private onWebglContextRestored = () => {
+    this._onError?.(new Error('WebGL context restored; rebuild required'), { phase: 'webglcontextrestored' })
+  }
+
   startLoop(onFrame: (delta: number, elapsed: number) => void) {
-    const clock = new THREE.Clock()
-    const loop = () => {
+    const timer = new THREE.Timer()
+    const loop = (timestamp: number) => {
       this._animId = requestAnimationFrame(loop)
-      const delta   = clock.getDelta()
-      const elapsed = clock.getElapsedTime()
+      timer.update(timestamp)
+      const delta   = timer.getDelta()
+      const elapsed = timer.getElapsed()
       this.controls.update()
       onFrame(delta, elapsed)
       this.renderer.render(this.scene, this.camera)
       this.css2dRenderer.render(this.scene, this.camera)
     }
-    loop()
+    requestAnimationFrame(loop)
   }
 
   dispose() {
     cancelAnimationFrame(this._animId)
-    this.renderer.dispose()
-    this.css2dRenderer.domElement.remove()
+    window.removeEventListener('resize', this.resize)
+    this._resizeObserver?.disconnect()
+    this._resizeObserver = undefined
+    this._canvas?.removeEventListener('webglcontextlost', this.onWebglContextLost)
+    this._canvas?.removeEventListener('webglcontextrestored', this.onWebglContextRestored)
+    this.controls?.dispose()
+    this.renderer?.dispose()
+    this.css2dRenderer?.domElement.remove()
   }
 }

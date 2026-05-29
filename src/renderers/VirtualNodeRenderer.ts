@@ -16,7 +16,7 @@ const TYPE_LABELS: Record<string, string> = {
   custom:   'NODE',
 }
 
-interface VNodeObj { group: THREE.Group; hitMesh: THREE.Mesh }
+interface VNodeObj { group: THREE.Group; hitMesh: THREE.Mesh; label: CSS2DObject }
 
 export class VirtualNodeRenderer {
   private scene:   THREE.Scene
@@ -88,13 +88,13 @@ export class VirtualNodeRenderer {
     group.add(hitMesh)
 
     this.scene.add(group)
-    this.objects.set(node.id, { group, hitMesh })
+    this.objects.set(node.id, { group, hitMesh, label })
   }
 
   removeNode(id: string) {
     const obj = this.objects.get(id)
     if (!obj) return
-    this.scene.remove(obj.group)
+    this.disposeNodeObject(obj)
     this.objects.delete(id)
   }
 
@@ -125,7 +125,20 @@ export class VirtualNodeRenderer {
   }
 
   dispose() {
-    this.objects.forEach(({ group }) => this.scene.remove(group))
+    this.objects.forEach(obj => this.disposeNodeObject(obj))
     this.objects.clear()
+  }
+
+  private disposeNodeObject(obj: VNodeObj) {
+    this.scene.remove(obj.group)
+    obj.label.element.remove()
+    obj.group.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry?.dispose()
+        const material = child.material
+        if (Array.isArray(material)) material.forEach(m => m.dispose())
+        else material?.dispose()
+      }
+    })
   }
 }

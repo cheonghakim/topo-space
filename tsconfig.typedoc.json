@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.app.json",
+  "include": ["src/public-api.d.ts", "src/types/**/*.ts"],
+  "exclude": ["src/**/*.vue", "src/main.ts", "src/index.ts"]
+}

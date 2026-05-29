@@ -87,13 +87,14 @@ import HelpPanel         from '@/components/ui/HelpPanel.vue'
 import ImportPanel       from '@/components/ui/ImportPanel.vue'
 import { useUIStore }    from '@/stores/ui'
 import { useEditorStore } from '@/stores/editor'
-import { useNmsEditor, timeline } from '@/composables/useNmsEditor'
+import { useNmsEditor } from '@/composables/useNmsEditor'
 import type { SavedView } from '@/types'
 import type * as THREE from 'three'
 
 const ui     = useUIStore()
 const editor = useEditorStore()
-const { saveCurrentView, loadSavedView, focusVirtualNode, onTimelineScrub, getScene } = useNmsEditor()
+const nmsEditor = useNmsEditor()
+const { saveCurrentView, loadSavedView, focusVirtualNode, onTimelineScrub, getScene, timeline } = nmsEditor
 
 const sceneRef    = ref<InstanceType<typeof SceneCanvas> | null>(null)
 const sceneReady  = ref(false)
@@ -129,13 +130,11 @@ watch(() => ui.fontScale, (v) => {
 </script>
 
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 100%; height: 100%; overflow: hidden; background: #080c18; }
-#app { width: 100%; height: 100%; }
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #1e3a5a; border-radius: 3px; }
-select option { background: #0f172a; color: #e2e8f0; }
+.app, .app * { box-sizing: border-box; }
+.app ::-webkit-scrollbar { width: 5px; height: 5px; }
+.app ::-webkit-scrollbar-track { background: transparent; }
+.app ::-webkit-scrollbar-thumb { background: #1e3a5a; border-radius: 3px; }
+.app select option { background: #0f172a; color: #e2e8f0; }
 
 /* User-adjustable UI text scale (canvas and pointer-anchored overlays excluded). */
 .menubar,

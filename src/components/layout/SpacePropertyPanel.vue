@@ -7,7 +7,7 @@
     </div>
 
     <div class="panel-body">
-      <section class="section">
+      <section class="section" v-if="ui.mode === 'edit'">
         <div class="sec-title">Info</div>
         <div class="info-grid">
           <span class="k">Kind</span>    <span class="v">{{ space.kind }}</span>
@@ -21,7 +21,7 @@
         <input v-model="name" class="inp" @change="applyName" />
       </section>
 
-      <section class="section" v-if="space.size">
+      <section class="section" v-if="ui.mode === 'edit' && space.size">
         <div class="sec-title">Size</div>
         <div class="slider-row">
           <span class="s-label">Width</span>
@@ -37,7 +37,7 @@
         </div>
       </section>
 
-      <section class="section actions">
+      <section class="section actions" v-if="ui.mode === 'edit'">
         <button class="act-btn archive" @click="archive">Archive space</button>
       </section>
     </div>
@@ -76,11 +76,13 @@ watch(space, s => {
 }, { immediate: true })
 
 function applyName() {
+  if (ui.mode !== 'edit') return
   if (!space.value) return
   editor.updateSpace(space.value.id, { name: name.value })
 }
 
 function applySize() {
+  if (ui.mode !== 'edit') return
   if (!space.value || !space.value.size) return
   editor.updateSpace(space.value.id, {
     size: { ...space.value.size, width: width.value, depth: depth.value },
@@ -89,6 +91,7 @@ function applySize() {
 }
 
 function archive() {
+  if (ui.mode !== 'edit') return
   if (!space.value) return
   if (!confirm('Archive this space?')) return
   editor.archiveSpace(space.value.id)

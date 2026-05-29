@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useEditorStore } from '@/stores/editor'
 import type { SelectionTarget, EditorMode, FilterState, EdgeType, DeviceStatus, DeviceType, Toast } from '@/types'
 import { DEFAULT_FILTER } from '@/types'
 
@@ -83,6 +84,7 @@ export const useUIStore = defineStore('ui', () => {
   // ── Actions ───────────────────────────────────────────────────────────────
   function setMode(m: EditorMode) {
     mode.value = m
+    useEditorStore().setEditorMode(m)
     if (m === 'view') {
       linkToolActive.value = false
       linkSourceDeviceId.value = null
@@ -95,6 +97,11 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   function toggleLinkTool() {
+    if (mode.value !== 'edit') {
+      linkToolActive.value = false
+      linkSourceDeviceId.value = null
+      return
+    }
     linkToolActive.value = !linkToolActive.value
     if (!linkToolActive.value) linkSourceDeviceId.value = null
   }

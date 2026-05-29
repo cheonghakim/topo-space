@@ -1,13 +1,20 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { PermissionGuard } from '@/core/PermissionGuard'
 import type {
   RawDevice, Space, DeviceMapping, NetworkLink,
   NetworkInterface, DeviceStatus, DeviceMetrics,
   VirtualNode, SavedView, EditorSnapshot,
+  EditorAction, EditorData, EditorMode, FeatureFlags,
+  PermissionContext, PermissionResolver,
 } from '@/types'
 import { generateMockData } from '@/utils/mockDataGenerator'
 
 export const useEditorStore = defineStore('editor', () => {
+  const guard = new PermissionGuard({ topologyEdit: true, layoutEdit: true, spaceEdit: true, annotationEdit: true, import: true })
+  let permissionDeniedHandler: ((ctx: PermissionContext) => void) | undefined
+  let changeHandler: ((event: { type: string; target?: { id?: string; type?: string }; source: 'user' | 'api' | 'plugin' | 'system'; timestamp: number }) => void) | undefined
+
   const devices    = ref<Map<string, RawDevice>>(new Map())
   const spaces     = ref<Map<string, Space>>(new Map())
   const mappings   = ref<Map<string, DeviceMapping>>(new Map())
@@ -18,6 +25,43 @@ export const useEditorStore = defineStore('editor', () => {
   const virtualNodes    = ref<Map<string, VirtualNode>>(new Map())
   const savedViews      = ref<SavedView[]>([])
   const changeLog       = ref<{ id: string; type: string; msg: string; ts: string }[]>([])
+
+  function configureSecurity(input: {
+    mode?: EditorMode
+    features?: FeatureFlags
+    permissionResolver?: PermissionResolver
+    onPermissionDenied?: (ctx: PermissionContext) => void
+    onChange?: (event: { type: string; target?: { id?: string; type?: string }; source: 'user' | 'api' | 'plugin' | 'system'; timestamp: number }) => void
+  }) {
+    if (input.mode) guard.setMode(input.mode)
+    if (input.features) guard.setFeatures(input.features)
+    if (input.permissionResolver) guard.setResolver(input.permissionResolver)
+    permissionDeniedHandler = input.onPermissionDenied
+    changeHandler = input.onChange
+  }
+
+  function setEditorMode(mode: EditorMode) {
+    guard.setMode(mode)
+  }
+
+  function can(action: EditorAction, target?: PermissionContext['target']): boolean {
+    return guard.can(action, target)
+  }
+
+  function deny(action: EditorAction, target?: PermissionContext['target']) {
+    const ctx: PermissionContext = { action, target }
+    permissionDeniedHandler?.(ctx)
+  }
+
+  function requirePermission(action: EditorAction, target?: PermissionContext['target']): boolean {
+    const allowed = can(action, target)
+    if (!allowed) deny(action, target)
+    return allowed
+  }
+
+  function emitChange(type: string, target?: { id?: string; type?: string }) {
+    changeHandler?.({ type, target, source: 'user', timestamp: Date.now() })
+  }
 
   // ── Computed ──────────────────────────────────────────────────────────────
   const mappedDeviceIds = computed(() => {
@@ -68,6 +112,16 @@ export const useEditorStore = defineStore('editor', () => {
     unmappedDevices.value = data.unmappedDevices
   }
 
+  function replaceData(data: EditorData) {
+    devices.value    = new Map((data.devices ?? []).map(d => [d.id, d]))
+    spaces.value     = new Map((data.spaces ?? []).map(s => [s.id, s]))
+    mappings.value   = new Map((data.deviceMappings ?? []).map(m => [m.id, m]))
+    links.value      = new Map((data.links ?? []).map(l => [l.id, l]))
+    interfaces.value = new Map((data.interfaces ?? []).map(i => [i.id, i]))
+    unmappedDevices.value = [...(data.unmappedDevices ?? [])]
+    virtualNodes.value = new Map((data.virtualNodes ?? []).map(n => [n.id, n]))
+  }
+
   function updateDeviceStatus(id: string, status: DeviceStatus, metrics?: Partial<DeviceMetrics>) {
     const dev = devices.value.get(id)
     if (!dev) return
@@ -108,20 +162,27 @@ export const useEditorStore = defineStore('editor', () => {
   }
 
   function addSpace(space: Space) {
+    if (!requirePermission('space:create', { id: space.id, spaceId: space.id })) return
     spaces.value.set(space.id, space)
+    emitChange('space:create', { id: space.id, type: 'space' })
   }
 
   function updateSpace(id: string, patch: Partial<Space>) {
+    if (!requirePermission('space:update', { id, spaceId: id })) return
     const s = spaces.value.get(id)
     if (s) Object.assign(s, patch)
+    emitChange('space:update', { id, type: 'space' })
   }
 
   function archiveSpace(id: string) {
+    if (!requirePermission('space:delete', { id, spaceId: id })) return
     const s = spaces.value.get(id)
     if (s) s.archived = true
+    emitChange('space:delete', { id, type: 'space' })
   }
 
   function mapDevice(deviceId: string, spaceId: string, slotIndex: number, position: { x: number; y: number; z: number }) {
+    if (!requirePermission('device:map', { id: deviceId, spaceId })) return
     const existing = [...mappings.value.values()].find(m => m.rawDeviceId === deviceId)
     const id = existing?.id ?? `map-${deviceId}`
     const mapping: DeviceMapping = {
@@ -134,9 +195,11 @@ export const useEditorStore = defineStore('editor', () => {
     }
     mappings.value.set(id, mapping)
     unmappedDevices.value = unmappedDevices.value.filter(d => d.id !== deviceId)
+    emitChange('device:map', { id: deviceId, type: 'device' })
   }
 
   function unmapDevice(deviceId: string) {
+    if (!requirePermission('device:unmap', { id: deviceId })) return
     const entry = [...mappings.value.entries()].find(([, m]) => m.rawDeviceId === deviceId)
     if (!entry) return
     const [key, m] = entry
@@ -147,40 +210,60 @@ export const useEditorStore = defineStore('editor', () => {
       unmappedDevices.value.push(dev)
     }
     mappings.value.delete(key)
+    emitChange('device:unmap', { id: deviceId, type: 'device' })
   }
 
   function updateAnnotation(deviceId: string, patch: { displayName?: string; tags?: string[]; memo?: string }) {
+    if (!requirePermission('annotation:update', { id: deviceId })) return
     const m = [...mappings.value.values()].find(m => m.rawDeviceId === deviceId)
     if (m) Object.assign(m, patch)
+    emitChange('annotation:update', { id: deviceId, type: 'device' })
   }
 
   function addLink(link: NetworkLink) {
+    if (!requirePermission('topology:createLink', { id: link.id })) return
     links.value.set(link.id, link)
+    emitChange('topology:createLink', { id: link.id, type: 'link' })
   }
 
   function updateLink(id: string, patch: Partial<NetworkLink>) {
+    if (!requirePermission('topology:updateLink', { id })) return
     const l = links.value.get(id)
     if (l) Object.assign(l, patch)
+    emitChange('topology:updateLink', { id, type: 'link' })
   }
 
   function removeLink(id: string) {
+    if (!requirePermission('topology:deleteLink', { id })) return
     links.value.delete(id)
+    emitChange('topology:deleteLink', { id, type: 'link' })
   }
 
   function getMappingByDeviceId(deviceId: string): DeviceMapping | undefined {
     return [...mappings.value.values()].find(m => m.rawDeviceId === deviceId)
   }
 
+  function getDevice(id: string): Readonly<RawDevice> | undefined {
+    const dev = devices.value.get(id)
+    return dev ? readonlyDevice(dev) : undefined
+  }
+
   // ── Virtual Nodes ─────────────────────────────────────────────────────────
   function addVirtualNode(node: VirtualNode) {
+    if (!requirePermission('virtualNode:create', { id: node.id })) return
     virtualNodes.value.set(node.id, node)
+    emitChange('virtualNode:create', { id: node.id, type: 'virtualNode' })
   }
   function removeVirtualNode(id: string) {
+    if (!requirePermission('virtualNode:delete', { id })) return
     virtualNodes.value.delete(id)
+    emitChange('virtualNode:delete', { id, type: 'virtualNode' })
   }
   function updateVirtualNode(id: string, patch: Partial<VirtualNode>) {
+    if (!requirePermission('virtualNode:update', { id })) return
     const n = virtualNodes.value.get(id)
     if (n) Object.assign(n, patch)
+    emitChange('virtualNode:update', { id, type: 'virtualNode' })
   }
 
   // ── Saved Views ──────────────────────────────────────────────────────────
@@ -205,6 +288,7 @@ export const useEditorStore = defineStore('editor', () => {
     site?: string; zone?: string; rack?: string;
     status?: string; uplink?: string;
   }[]): { devices: number; spaces: number; links: number } {
+    if (!requirePermission('import')) return { devices: 0, spaces: 0, links: 0 }
     // Group rows by site / zone / rack so we can assign coordinates deterministically.
     type Group = Map<string, Map<string, Map<string, typeof rows>>>
     const tree: Group = new Map()
@@ -388,24 +472,53 @@ export const useEditorStore = defineStore('editor', () => {
   }
 
   function importSnapshot(snap: EditorSnapshot) {
-    snap.spaces.forEach(s => spaces.value.set(s.id, s))
-    snap.deviceMappings.forEach(m => mappings.value.set(m.id, m))
-    snap.manualLinks.forEach(l => links.value.set(l.id, l))
+    if (!requirePermission('import')) return
+    const safeSnap = sanitizeSnapshot(snap)
+    safeSnap.spaces.forEach(s => spaces.value.set(s.id, s))
+    safeSnap.deviceMappings.forEach(m => mappings.value.set(m.id, m))
+    safeSnap.manualLinks.forEach(l => links.value.set(l.id, l))
     unmappedDevices.value = unmappedDevices.value.filter(
-      d => !snap.deviceMappings.find(m => m.rawDeviceId === d.id && m.mappingStatus === 'mapped')
+      d => !safeSnap.deviceMappings.find(m => m.rawDeviceId === d.id && m.mappingStatus === 'mapped')
     )
+  }
+
+  function sanitizeSnapshot(snap: EditorSnapshot): EditorSnapshot {
+    return sanitizePlainObject(snap) as EditorSnapshot
+  }
+
+  function sanitizePlainObject<T>(value: T): T {
+    if (Array.isArray(value)) return value.map(sanitizePlainObject) as T
+    if (!value || typeof value !== 'object') return value
+    const out: Record<string, unknown> = {}
+    Object.entries(value as Record<string, unknown>).forEach(([key, item]) => {
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') return
+      out[key] = sanitizePlainObject(item)
+    })
+    return out as T
+  }
+
+  function readonlyDevice(dev: RawDevice): Readonly<RawDevice> {
+    return new Proxy(dev, {
+      set() {
+        throw new TypeError('RawDevice is read-only. Use explicit editor commands for changes.')
+      },
+      deleteProperty() {
+        throw new TypeError('RawDevice is read-only. Use explicit editor commands for changes.')
+      },
+    })
   }
 
   return {
     devices, spaces, mappings, links, interfaces, unmappedDevices,
     mappedDeviceIds, criticalCount, warningCount,
     devicesBySpace, interfacesByDevice, rackSpaces, allSpacesList,
-    loadMockData, updateDeviceStatus, upsertDevices, addManualDevice,
+    configureSecurity, setEditorMode, can,
+    loadMockData, replaceData, updateDeviceStatus, upsertDevices, addManualDevice,
     importTopology,
     addSpace, updateSpace, archiveSpace,
     mapDevice, unmapDevice, updateAnnotation,
     addLink, updateLink, removeLink,
-    getMappingByDeviceId,
+    getMappingByDeviceId, getDevice,
     virtualNodes, savedViews, changeLog,
     addVirtualNode, removeVirtualNode, updateVirtualNode,
     addSavedView, removeSavedView,

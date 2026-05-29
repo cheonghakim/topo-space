@@ -13,6 +13,7 @@ export class PermissionGuard {
 
   setMode(mode: EditorMode) { this.mode = mode }
   setFeatures(features: FeatureFlags) { this.features = { ...DEFAULT_FEATURES, ...features } }
+  setResolver(resolver: PermissionResolver) { this.resolver = resolver }
 
   can(action: EditorAction, target?: PermissionContext['target']): boolean {
     if (action === 'rawDevice:update') return false
@@ -28,7 +29,8 @@ export class PermissionGuard {
         'layout:update','space:create','space:update','space:delete',
         'device:map','device:unmap','annotation:create','annotation:update','annotation:delete',
         'topology:createLink','topology:updateLink','topology:deleteLink',
-        'virtualNode:create',
+        'virtualNode:create','virtualNode:update','virtualNode:delete',
+        'import',
       ]
       if (editActions.includes(action)) return false
     }

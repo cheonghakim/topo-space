@@ -32,10 +32,14 @@
       Connect mode — <b>drag</b> from one device to another, then pick a link type · <kbd>ESC</kbd> to cancel
     </div>
 
-    <div v-else class="hint">
+    <div v-else-if="ui.mode === 'edit'" class="hint">
       Click to select, then drag the
       <span style="color:#ff6b7a">X</span>/<span style="color:#5fd968">Y</span>/<span style="color:#5fb0ff">Z</span>
       arrows to move · select a link and drag its handle · <kbd>L</kbd> Connect · <kbd>Del</kbd> Delete · <kbd>F</kbd> Fit
+    </div>
+
+    <div v-else class="hint">
+      View mode - click to inspect - <kbd>F</kbd> Fit
     </div>
   </div>
 </template>

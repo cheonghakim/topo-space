@@ -2,7 +2,7 @@
   <div class="vn-panel">
     <div class="vn-head">
       <span>Virtual Nodes</span>
-      <button class="text-btn" @click="showAdd = !showAdd">Add</button>
+      <button v-if="ui.mode === 'edit'" class="text-btn" @click="showAdd = !showAdd">Add</button>
       <button class="text-btn" @click="ui.showVirtualNodes = false">Close</button>
     </div>
 
@@ -10,13 +10,13 @@
       <div v-for="node in vnList" :key="node.id" class="vn-row" @click="selectNode(node.id)">
         <span class="vn-tag">{{ node.type.slice(0, 3).toUpperCase() }}</span>
         <span class="vn-label">{{ node.label }}</span>
-        <button class="del-btn" @click.stop="removeNode(node.id)">✕</button>
+        <button v-if="ui.mode === 'edit'" class="del-btn" @click.stop="removeNode(node.id)">x</button>
       </div>
       <div v-if="!vnList.length" class="vn-empty">No virtual nodes</div>
     </div>
 
     <Transition name="fade">
-      <div v-if="showAdd" class="add-form">
+      <div v-if="ui.mode === 'edit' && showAdd" class="add-form">
         <select v-model="newType" class="add-sel">
           <option value="internet">Internet</option>
           <option value="cloud">Cloud</option>
@@ -47,6 +47,7 @@ const newLabel = ref('')
 const vnList = computed(() => [...editor.virtualNodes.values()])
 
 function addNode() {
+  if (ui.mode !== 'edit') return
   if (!newLabel.value.trim()) return
   const id = `vn-${Date.now()}`
   editor.addVirtualNode({
@@ -62,6 +63,7 @@ function addNode() {
 }
 
 function removeNode(id: string) {
+  if (ui.mode !== 'edit') return
   editor.removeVirtualNode(id)
 }
 

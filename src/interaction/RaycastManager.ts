@@ -1,8 +1,13 @@
 import * as THREE from 'three'
+import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh'
 import type { DeviceType } from '@/types'
 import type { DeviceRenderer } from '@/renderers/DeviceRenderer'
 import type { SpaceRenderer }  from '@/renderers/SpaceRenderer'
 import type { LinkRenderer }   from '@/renderers/LinkRenderer'
+
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree
+THREE.Mesh.prototype.raycast = acceleratedRaycast
 
 export interface RaycastResult {
   deviceId?:     string

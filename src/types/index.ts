@@ -28,7 +28,9 @@ export type EditorAction =
   | 'device:map' | 'device:unmap'
   | 'annotation:create' | 'annotation:update' | 'annotation:delete'
   | 'topology:createLink' | 'topology:updateLink' | 'topology:deleteLink'
-  | 'virtualNode:create' | 'rawDevice:update'
+  | 'virtualNode:create' | 'virtualNode:update' | 'virtualNode:delete'
+  | 'import'
+  | 'rawDevice:update'
 
 
 export interface DeviceMetrics {
@@ -221,6 +223,44 @@ export interface PermissionContext {
 }
 
 export type PermissionResolver = (ctx: PermissionContext) => boolean
+
+export interface EditorEventPayload<T = unknown> {
+  type: string
+  target?: { id?: string; type?: string }
+  source: 'user' | 'api' | 'plugin' | 'system'
+  timestamp: number
+  before?: T
+  after?: T
+}
+
+export interface EditorData {
+  devices?: RawDevice[]
+  spaces?: Space[]
+  deviceMappings?: DeviceMapping[]
+  links?: NetworkLink[]
+  interfaces?: NetworkInterface[]
+  unmappedDevices?: RawDevice[]
+  virtualNodes?: VirtualNode[]
+}
+
+export interface EditorOptions {
+  container?: HTMLElement
+  data?: EditorData
+  features?: FeatureFlags
+  permissionResolver?: PermissionResolver
+  mode?: EditorMode
+  mockData?: boolean
+  onReady?: () => void
+  onChange?: (event: EditorEventPayload) => void
+  onSave?: (snapshot: EditorSnapshot) => void | Promise<void>
+  onError?: (error: Error, context?: Record<string, unknown>) => void
+  onPermissionDenied?: (ctx: PermissionContext) => void
+  onPerformanceWarning?: (metric: Record<string, unknown>) => void
+  onOpenExternal?: (url: string, ctx?: Record<string, unknown>) => void
+  shadowDom?: boolean
+  stylesheetUrl?: string
+  styleNonce?: string
+}
 
 // ─── Selection ───────────────────────────────────────────────────────────────
 

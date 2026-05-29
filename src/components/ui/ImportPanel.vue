@@ -1,8 +1,7 @@
 <template>
   <Teleport to="body">
-    <Transition name="imp-fade">
-      <div v-if="ui.showImport" class="imp-overlay" @click.self="close">
-        <div class="imp-modal">
+    <div v-if="ui.showImport" class="imp-overlay" @click.self="close">
+      <div class="imp-modal">
           <div class="imp-head">
             <span class="imp-title">Import Devices &amp; Topology</span>
             <button class="text-btn" @click="downloadTemplate">Download CSV template</button>
@@ -80,19 +79,21 @@
                 <input type="checkbox" v-model="replaceAll" />
                 <span>Replace current scene (clear existing devices, spaces, links)</span>
               </label>
-              <button class="run-btn" @click="run">
+              <div v-if="ui.mode !== 'edit'" class="mode-warning">
+                Switch to Edit mode before importing topology data.
+              </div>
+              <button class="run-btn" :disabled="ui.mode !== 'edit' || importing" @click="run">
                 Import {{ result.rows.length }} devices
               </button>
             </section>
           </div>
-        </div>
       </div>
-    </Transition>
+    </div>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { useUIStore }     from '@/stores/ui'
 import { useEditorStore } from '@/stores/editor'
 import { useNmsEditor }   from '@/composables/useNmsEditor'
@@ -107,6 +108,7 @@ const fileName  = ref('')
 const dragOver  = ref(false)
 const result    = ref<ParseResult | null>(null)
 const replaceAll = ref(false)
+const importing = ref(false)
 
 function close() { ui.showImport = false }
 
@@ -145,30 +147,48 @@ function downloadTemplate() {
   URL.revokeObjectURL(a.href)
 }
 
-function run() {
-  if (!result.value || !result.value.rows.length) return
+async function run() {
+  const current = result.value
+  if (!current || !current.rows.length) return
+  if (ui.mode !== 'edit') {
+    ui.addToast('Switch to Edit mode before importing', 'warning')
+    return
+  }
+  importing.value = true
   if (replaceAll.value) {
-    if (!confirm('Replace the current scene? This will remove existing devices, spaces, and links.')) return
+    if (!confirm('Replace the current scene? This will remove existing devices, spaces, and links.')) {
+      importing.value = false
+      return
+    }
     clearScene()
   }
-  const summary = editor.importTopology(result.value.rows)
-  rebuildAll()
-  ui.addToast(
-    `Imported ${summary.devices} devices, ${summary.spaces} spaces, ${summary.links} links`,
-    'success',
-  )
-  ui.showImport = false
-  result.value  = null
-  fileName.value = ''
-  replaceAll.value = false
+  try {
+    const summary = editor.importTopology(current.rows)
+    await nextTick()
+    rebuildAll()
+    ui.addToast(
+      `Imported ${summary.devices} devices, ${summary.spaces} spaces, ${summary.links} links`,
+      'success',
+    )
+    result.value  = null
+    fileName.value = ''
+    replaceAll.value = false
+    ui.showImport = false
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    result.value = {
+      rows: current.rows,
+      errors: [`Failed to import: ${message}`],
+      warnings: current.warnings,
+    }
+    ui.addToast('Import failed', 'critical')
+  } finally {
+    importing.value = false
+  }
 }
 
 function clearScene() {
-  editor.devices.clear()
-  editor.spaces.clear()
-  editor.mappings.clear()
-  editor.links.clear()
-  editor.unmappedDevices.splice(0)
+  editor.replaceData({})
 }
 </script>
 
@@ -258,6 +278,14 @@ function clearScene() {
   padding: 8px 18px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
 }
 .run-btn:hover { background: #2a4a8a; }
+.run-btn:disabled {
+  cursor: not-allowed; opacity: .45; background: #0f172a; color: #64748b;
+}
+.mode-warning {
+  margin-bottom: 8px; color: #fbbf24; font-size: 11px;
+  background: rgba(234,179,8,.08); border: 1px solid #78350f;
+  border-radius: 6px; padding: 7px 9px;
+}
 
 .imp-fade-enter-active, .imp-fade-leave-active { transition: opacity .15s; }
 .imp-fade-enter-from, .imp-fade-leave-to { opacity: 0; }

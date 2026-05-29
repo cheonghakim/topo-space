@@ -53,14 +53,13 @@ export class SpaceRenderer {
 
     const badge = new CSS2DObject(badgeEl)
     badge.position.set(0, (space.type === 'rack' ? 1.0 : 0.8), 0)
-    badge.visible = space.type === 'rack' || space.type === 'site'
+    badge.visible = this.shouldShowBadge(space.type)
     group.add(badge)
 
     const hitH = space.type === 'rack' ? 0.25 : 0.4
-    const hitMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(size.width, hitH, size.depth),
-      new THREE.MeshBasicMaterial({ visible: false }),
-    )
+    const hitGeo = new THREE.BoxGeometry(size.width, hitH, size.depth)
+    hitGeo.computeBoundsTree()
+    const hitMesh = new THREE.Mesh(hitGeo, new THREE.MeshBasicMaterial({ visible: false }))
     hitMesh.position.y = hitH / 2
     hitMesh.userData.spaceId = space.id
     hitMesh.userData.spaceType = space.type
@@ -68,6 +67,7 @@ export class SpaceRenderer {
 
     this.scene.add(group)
     this.objects.set(space.id, { group, hitMesh, badgeEl, badge })
+    this.applyBadgeLod()
   }
 
   private _buildRack(group: THREE.Group, _space: Space, size: Size3DLike, colors: { floor: number; edge: number }) {
@@ -149,6 +149,13 @@ export class SpaceRenderer {
     if (obj) obj.badgeEl.textContent = text
   }
 
+  applyBadgeLod() {
+    this.objects.forEach((obj) => {
+      const type = obj.hitMesh.userData.spaceType as Space['type']
+      obj.badge.visible = this.shouldShowBadge(type)
+    })
+  }
+
   setPosition(spaceId: string, pos: THREE.Vector3) {
     const obj = this.objects.get(spaceId)
     if (!obj) return
@@ -158,8 +165,9 @@ export class SpaceRenderer {
   removeSpace(spaceId: string) {
     const obj = this.objects.get(spaceId)
     if (!obj) return
-    this.scene.remove(obj.group)
+    this.disposeSpaceObject(obj)
     this.objects.delete(spaceId)
+    this.applyBadgeLod()
   }
 
   getHitMeshes(): THREE.Mesh[] {
@@ -172,9 +180,31 @@ export class SpaceRenderer {
     return obj.group.position.clone()
   }
 
+  private shouldShowBadge(type: Space['type']): boolean {
+    const count = this.objects.size
+    if (type === 'site') return true
+    if (count > 120) return false
+    if (count > 60) return type !== 'rack'
+    return type === 'rack' || type === 'zone' || type === 'cloud'
+  }
+
   dispose() {
-    this.objects.forEach(obj => this.scene.remove(obj.group))
+    this.objects.forEach(obj => this.disposeSpaceObject(obj))
     this.objects.clear()
+  }
+
+  private disposeSpaceObject(obj: SpaceObj) {
+    this.scene.remove(obj.group)
+    obj.badge.element.remove()
+    obj.group.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.LineLoop) {
+        child.geometry?.disposeBoundsTree?.()
+        child.geometry?.dispose()
+        const material = child.material
+        if (Array.isArray(material)) material.forEach(m => m.dispose())
+        else material?.dispose()
+      }
+    })
   }
 }
 

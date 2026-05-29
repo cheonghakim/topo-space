@@ -44,6 +44,7 @@ export function getDeviceGeometry(type: DeviceType): THREE.BufferGeometry {
     }
   }
 
+  geo.computeBoundsTree()
   _cache.set(type, geo)
   return geo
 }
@@ -53,6 +54,6 @@ export function getDeviceHeight(type: DeviceType): number {
 }
 
 export function disposeGeometryCache() {
-  _cache.forEach(geo => geo.dispose())
+  _cache.forEach(geo => { geo.disposeBoundsTree(); geo.dispose() })
   _cache.clear()
 }

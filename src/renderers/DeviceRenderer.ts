@@ -38,6 +38,7 @@ export class DeviceRenderer {
   private instanceColors  = new Map<string, THREE.Color>()
   private statusMap       = new Map<string, DeviceStatus>()
   private dimmedIds       = new Set<string>()
+  private searchLabels    = new Map<string, CSS2DObject>()
 
   constructor(scene: THREE.Scene) {
     this.scene = scene
@@ -129,6 +130,33 @@ export class DeviceRenderer {
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
   }
 
+  setSearchFocus(matchingIds: Set<string>, labelFor: (id: string) => string | undefined) {
+    this.clearSearchLabels()
+    if (!matchingIds.size) return
+
+    let rendered = 0
+    matchingIds.forEach((id) => {
+      if (rendered >= 80) return
+      const pos = this.getDeviceWorldPos(id)
+      if (!pos) return
+
+      const el = document.createElement('div')
+      el.className = 'device-search-label'
+      el.style.cssText = `
+        background:rgba(250,204,21,.96);border:1px solid #fef08a;border-radius:6px;
+        box-shadow:0 0 18px rgba(250,204,21,.8),0 0 2px #000;
+        color:#111827;font-size:11px;font-weight:700;font-family:monospace;
+        padding:3px 8px;white-space:nowrap;pointer-events:none;`
+      el.textContent = labelFor(id) ?? id
+
+      const label = new CSS2DObject(el)
+      label.position.copy(pos).add(new THREE.Vector3(0, 1.7, 0))
+      this.scene.add(label)
+      this.searchLabels.set(id, label)
+      rendered += 1
+    })
+  }
+
   // deviceId by instanceId + type
   getDeviceIdByInstance(type: DeviceType, instanceId: number): string | undefined {
     const mesh = this.instancedMeshes.get(type)
@@ -154,6 +182,7 @@ export class DeviceRenderer {
   applySearchFilter(matchingIds: Set<string>, hasFilter: boolean) {
     if (!hasFilter) {
       this.dimmedIds.clear()
+      this.clearSearchLabels()
       this.instancedMeshes.forEach((mesh) => {
         for (let i = 0; i < mesh.count; i++) {
           const deviceId = mesh.userData[`device_${i}`] as string
@@ -178,7 +207,7 @@ export class DeviceRenderer {
         const status  = this.statusMap.get(deviceId)
         if (!status) continue
         const base = STATUS_COLOR_THREE[status].clone()
-        const color = isMatch ? base.clone().multiplyScalar(2.4) : base.clone().multiplyScalar(0.15)
+        const color = isMatch ? new THREE.Color(0xfff176) : base.clone().multiplyScalar(0.08)
         mesh.setColorAt(i, color)
         this.instanceColors.set(deviceId, color)
       }
@@ -199,6 +228,7 @@ export class DeviceRenderer {
   }
 
   dispose() {
+    this.clearSearchLabels()
     this.instancedMeshes.forEach(mesh => {
       mesh.geometry.dispose()
       ;(mesh.material as THREE.Material).dispose()
@@ -208,5 +238,13 @@ export class DeviceRenderer {
     this.instanceIndex.clear()
     _matCache.forEach(m => m.dispose())
     _matCache.clear()
+  }
+
+  private clearSearchLabels() {
+    this.searchLabels.forEach((label) => {
+      this.scene.remove(label)
+      label.element.remove()
+    })
+    this.searchLabels.clear()
   }
 }

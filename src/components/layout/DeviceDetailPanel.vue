@@ -76,7 +76,7 @@
         </div>
       </section>
 
-      <section class="section actions">
+      <section class="section actions" v-if="ui.mode === 'edit'">
         <div class="sec-title">Actions</div>
         <div class="action-btns">
           <button class="act-btn isolate"  @click="isolate">Isolate</button>

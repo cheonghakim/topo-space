@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { watch, nextTick } from 'vue'
+import { inject, watch, nextTick, type InjectionKey, type WatchStopHandle } from 'vue'
 import { SceneManager }         from '@/renderers/SceneManager'
 import { DeviceRenderer }       from '@/renderers/DeviceRenderer'
 import { SpaceRenderer }        from '@/renderers/SpaceRenderer'
@@ -14,52 +14,95 @@ import { DragMoveManager }      from '@/interaction/DragMoveManager'
 import { CameraController }     from '@/interaction/CameraController'
 import { ArrowGizmo }            from '@/interaction/ArrowGizmo'
 import type { GizmoAxis }        from '@/interaction/ArrowGizmo'
-import { PermissionGuard }      from '@/core/PermissionGuard'
 import { ChangeManager }        from '@/core/ChangeManager'
 import { TimelineManager }      from '@/core/TimelineManager'
 import { useEditorStore }       from '@/stores/editor'
 import { useUIStore }           from '@/stores/ui'
-import type { EdgeType, SavedView } from '@/types'
+import type { EdgeType, EditorOptions, SavedView } from '@/types'
 import type { BlastInfo }       from '@/renderers/BlastRadiusRenderer'
 
-const scene   = new SceneManager()
-const perm    = new PermissionGuard({ topologyEdit: true, layoutEdit: true, spaceEdit: true, annotationEdit: true })
-const changes = new ChangeManager({})
-export const timeline = new TimelineManager()
+export const NMS_EDITOR_OPTIONS_KEY: InjectionKey<EditorOptions> = Symbol('topospace-editor-options')
 
-let device:   DeviceRenderer
-let space:    SpaceRenderer
-let link:     LinkRenderer
-let particle: ParticleRenderer
-let blast:    BlastRadiusRenderer
-let vnode:    VirtualNodeRenderer
-let flash:    FlashEffectRenderer
-let raycast:  RaycastManager
-let linkDrag: LinkDragManager
-let dragMove: DragMoveManager
-let gizmo:    ArrowGizmo
-let camera:   CameraController
-let _canvas:  HTMLCanvasElement | null = null
-let _mounted  = false
-let _startPointer = { x: 0, y: 0 }
-let _isDragCandidate = false
+type EditorStore = ReturnType<typeof useEditorStore>
+type UIStore = ReturnType<typeof useUIStore>
 
-let _gizmoAxis:        GizmoAxis | null = null
-let _gizmoStartDrag:   THREE.Vector3 | null = null
-let _gizmoStartPos:    THREE.Vector3 | null = null
-let _spaceChildren:    { id: string; offset: THREE.Vector3 }[] = []
-const _prevStatus = new Map<string, string>()
+const runtimes = new WeakMap<EditorStore, ReturnType<typeof createNmsEditorRuntime>>()
+let _options: EditorOptions = {}
+
+export function configureNmsEditor(options: EditorOptions = {}) {
+  _options = options
+}
 
 export function useNmsEditor() {
   const editor = useEditorStore()
   const ui     = useUIStore()
+  const options = inject(NMS_EDITOR_OPTIONS_KEY, _options)
+  let runtime = runtimes.get(editor)
+  if (!runtime) {
+    runtime = createNmsEditorRuntime(editor, ui, options)
+    runtimes.set(editor, runtime)
+  } else {
+    runtime.configure(options)
+  }
+  return runtime
+}
+
+function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions: EditorOptions = {}) {
+  const scene   = new SceneManager()
+  const changes = new ChangeManager({})
+  const timeline = new TimelineManager()
+
+  let device:   DeviceRenderer
+  let space:    SpaceRenderer
+  let link:     LinkRenderer
+  let particle: ParticleRenderer
+  let blast:    BlastRadiusRenderer
+  let vnode:    VirtualNodeRenderer
+  let flash:    FlashEffectRenderer
+  let raycast:  RaycastManager
+  let linkDrag: LinkDragManager
+  let dragMove: DragMoveManager
+  let gizmo:    ArrowGizmo
+  let camera:   CameraController
+  let _canvas:  HTMLCanvasElement | null = null
+  let _mounted  = false
+  let _startPointer = { x: 0, y: 0 }
+  let _isDragCandidate = false
+
+  let _gizmoAxis:        GizmoAxis | null = null
+  let _gizmoStartDrag:   THREE.Vector3 | null = null
+  let _gizmoStartPos:    THREE.Vector3 | null = null
+  let _spaceChildren:    { id: string; offset: THREE.Vector3 }[] = []
+  const _prevStatus = new Map<string, string>()
+  const _watchStops: WatchStopHandle[] = []
+  let options = initialOptions
+  let _fpsWindowStart = 0
+  let _fpsFrames = 0
+  let _lastPerfWarning = 0
+
+  function configure(nextOptions: EditorOptions = {}) {
+    options = nextOptions
+  }
 
   function init(canvas: HTMLCanvasElement, overlay: HTMLElement, wrapper: HTMLElement) {
     if (_mounted) return
     _canvas  = canvas
     _mounted = true
+    editor.configureSecurity({
+      mode: options.mode ?? ui.mode,
+      features: options.features,
+      permissionResolver: options.permissionResolver,
+      onPermissionDenied: (ctx) => {
+        ui.addToast('Permission denied', 'warning')
+        options.onPermissionDenied?.(ctx)
+      },
+      onChange: options.onChange,
+    })
+    ui.setMode(options.mode ?? ui.mode)
 
-    scene.init(canvas, overlay, wrapper)
+    scene.init(canvas, overlay, wrapper, {
+      onError: (error, context) => options.onError?.(error, context),
+    })
     device   = new DeviceRenderer(scene.scene)
     space    = new SpaceRenderer(scene.scene)
     link     = new LinkRenderer(scene.scene)
@@ -76,12 +119,14 @@ export function useNmsEditor() {
 
     gizmo = new ArrowGizmo(scene.scene)
 
-    editor.loadMockData()
+    if (options.data) editor.replaceData(options.data)
+    else if (options.mockData !== false) editor.loadMockData()
     nextTick(() => _buildScene())
 
     _bindEvents(canvas)
     _bindWatchers()
     _startLoop()
+    options.onReady?.()
   }
 
   function _buildScene() {
@@ -104,13 +149,13 @@ export function useNmsEditor() {
     canvas.addEventListener('pointerdown',  onPointerDown)
     canvas.addEventListener('pointermove',  onPointerMove)
     canvas.addEventListener('pointerup',    onPointerUp)
-    canvas.addEventListener('contextmenu',  (e) => e.preventDefault())
+    canvas.addEventListener('contextmenu',  onContextMenu)
     window.addEventListener('keydown',      onKeyDown)
   }
 
   function _bindWatchers() {
     editor.devices.forEach(d => _prevStatus.set(d.id, d.status ?? 'unknown'))
-    watch(
+    _watchStops.push(watch(
       () => { let s = ''; editor.devices.forEach(d => { s += `${d.id}:${d.status};` }); return s },
       () => {
         editor.devices.forEach(d => {
@@ -133,28 +178,28 @@ export function useNmsEditor() {
           _prevStatus.set(d.id, cur)
         })
       },
-    )
+    ))
 
-    watch(() => editor.links.size, () => rebuildLinks())
+    _watchStops.push(watch(() => editor.links.size, () => rebuildLinks()))
 
-    watch(() => [...ui.visibleLinkTypes], (types) => {
+    _watchStops.push(watch(() => [...ui.visibleLinkTypes], (types) => {
       const all: EdgeType[] = ['physical','logical','service_dependency','traffic_flow','security_path','manual','inferred']
       all.forEach(t => link.setVisible(t, types.includes(t)))
-    })
+    }))
 
-    watch(() => ui.hoveredId, (newId, oldId) => {
+    _watchStops.push(watch(() => ui.hoveredId, (newId, oldId) => {
       if (oldId) { device.setHighlight(oldId, false); link.setHighlight(null, oldId) }
       if (newId) {
         if (ui.selection?.type === 'link') link.setHighlight(newId, null)
         else device.setHighlight(newId, true)
       }
-    })
+    }))
 
-    watch(() => ui.selection, (sel, prev) => {
+    _watchStops.push(watch(() => ui.selection, (sel, prev) => {
       if (prev?.type === 'space') space.setSelected(prev.id, false)
       if (prev?.type === 'link')  link.setSelected(null)
 
-      if (sel && (sel.type === 'device' || sel.type === 'space')) {
+      if (ui.mode === 'edit' && sel && (sel.type === 'device' || sel.type === 'space')) {
         attachGizmoToSelection(sel)
       } else {
         gizmo?.detach()
@@ -189,37 +234,52 @@ export function useNmsEditor() {
       } else if (sel.type === 'link') {
         link.setSelected(sel.id)
       }
-    })
+    }))
 
 
-    watch(() => ui.linkToolActive, (on) => {
+    _watchStops.push(watch(() => ui.mode, (mode) => {
+      editor.setEditorMode(mode)
+      if (mode === 'view') {
+        gizmo?.detach()
+        linkDrag?.cancel()
+        dragMove?.cancel()
+        _gizmoAxis = null
+        _gizmoStartDrag = null
+        _gizmoStartPos = null
+        _spaceChildren = []
+      } else if (ui.selection && (ui.selection.type === 'device' || ui.selection.type === 'space')) {
+        attachGizmoToSelection(ui.selection)
+      }
+    }, { immediate: true }))
+
+    _watchStops.push(watch(() => ui.linkToolActive, (on) => {
       if (!on) linkDrag.cancel()
       if (_canvas) _canvas.style.cursor = on ? 'crosshair' : ''
       if (on) ui.addToast('Connect mode on — drag from one device to another', 'info')
-    })
+    }))
 
-    watch(() => ui.showParticles, (v) => particle.setVisible(v))
-    watch(() => ui.showBlastRadius, (v) => { if (!v) blast.clear() })
+    _watchStops.push(watch(() => ui.showParticles, (v) => particle.setVisible(v)))
+    _watchStops.push(watch(() => ui.showBlastRadius, (v) => { if (!v) blast.clear() }))
 
-    watch(() => editor.virtualNodes.size, () => {
+    _watchStops.push(watch(() => editor.virtualNodes.size, () => {
       vnode.dispose()
       vnode = new VirtualNodeRenderer(scene.scene)
       vnode.loadNodes([...editor.virtualNodes.values()])
-    })
+    }))
 
-    watch(() => ui.timelineFrameIdx, (idx) => {
+    _watchStops.push(watch(() => ui.timelineFrameIdx, (idx) => {
       if (idx < 0) return
       const frame = timeline.getFrame(idx)
       if (!frame) return
       Object.entries(frame.states).forEach(([id, s]) => editor.updateDeviceStatus(id, s.status, s.metrics))
-    })
+    }))
 
-    watch(() => editor.spaces.size, () => editor.spaces.forEach(s => space.addSpace(s)))
+    _watchStops.push(watch(() => editor.spaces.size, () => editor.spaces.forEach(s => space.addSpace(s))))
 
-    watch(
+    _watchStops.push(watch(
       () => `${ui.filter.search}|${ui.filter.status.join(',')}|${ui.filter.type.join(',')}`,
       () => applySearchFilter(),
-    )
+    ))
   }
 
   function _verticalPlanePoint(e: PointerEvent, anchor: THREE.Vector3): THREE.Vector3 | null {
@@ -243,6 +303,10 @@ export function useNmsEditor() {
 
   function attachGizmoToSelection(sel: { type: string; id: string }) {
     if (!gizmo) return
+    if (ui.mode !== 'edit') {
+      gizmo.detach()
+      return
+    }
     if (sel.type === 'device') {
       const pos = device.getDeviceWorldPos(sel.id)
       if (pos) gizmo.attach({ type: 'device', id: sel.id }, pos)
@@ -274,10 +338,15 @@ export function useNmsEditor() {
       if (matchSearch && matchStatus && matchType) matchingIds.add(dev.id)
     })
     device.applySearchFilter(matchingIds, true)
+    device.setSearchFocus(matchingIds, (id) => {
+      const dev = editor.devices.get(id)
+      return dev?.hostname ?? dev?.ip ?? id
+    })
   }
 
   function _startLoop() {
     scene.startLoop((delta, elapsed) => {
+      trackPerformance(delta, elapsed)
       link.update(delta)
       blast.update(delta)
       vnode.update(elapsed)
@@ -286,10 +355,12 @@ export function useNmsEditor() {
       if (ui.showParticles) particle.update(delta, ui.visibleLinkTypes)
 
       // warning/critical pulse
-      editor.devices.forEach(d => {
-        if (d.status === 'warning')  device.pulseStatus(d.id, 'warning',  0.4 * Math.abs(Math.sin(elapsed * 1.6)))
-        if (d.status === 'critical') device.pulseStatus(d.id, 'critical', 0.7 * Math.abs(Math.sin(elapsed * 4.0)))
-      })
+      if (!hasActiveFilter()) {
+        editor.devices.forEach(d => {
+          if (d.status === 'warning')  device.pulseStatus(d.id, 'warning',  0.4 * Math.abs(Math.sin(elapsed * 1.6)))
+          if (d.status === 'critical') device.pulseStatus(d.id, 'critical', 0.7 * Math.abs(Math.sin(elapsed * 4.0)))
+        })
+      }
 
       if (!_gizmoAxis && !linkDrag.isDrawing && !dragMove.hasPending) {
         const hit    = raycast.castHover(32)
@@ -299,13 +370,39 @@ export function useNmsEditor() {
     })
   }
 
+  function hasActiveFilter() {
+    return !!ui.filter.search.trim() || ui.filter.status.length > 0 || ui.filter.type.length > 0
+  }
+
+  function trackPerformance(delta: number, elapsed: number) {
+    _fpsFrames += 1
+    if (!_fpsWindowStart) _fpsWindowStart = elapsed
+    const windowSeconds = elapsed - _fpsWindowStart
+    if (windowSeconds < 5) return
+
+    const fps = _fpsFrames / windowSeconds
+    const now = performance.now()
+    if (fps < 30 && now - _lastPerfWarning > 15000) {
+      _lastPerfWarning = now
+      options.onPerformanceWarning?.({
+        type: 'low-fps',
+        fps: Math.round(fps * 10) / 10,
+        frameMs: Math.round(delta * 10000) / 10,
+        devices: editor.devices.size,
+        links: editor.links.size,
+      })
+    }
+    _fpsWindowStart = elapsed
+    _fpsFrames = 0
+  }
+
   function onPointerDown(e: PointerEvent) {
     if (!_canvas) return
     _startPointer = { x: e.clientX, y: e.clientY }
     raycast.updatePointer(e, _canvas)
     _isDragCandidate = false
 
-    if (gizmo.isVisible) {
+    if (ui.mode === 'edit' && gizmo.isVisible) {
       const axis = gizmo.pickAxis(raycast.currentPointer, scene.camera)
       if (axis) {
         _gizmoAxis     = axis
@@ -330,14 +427,14 @@ export function useNmsEditor() {
 
     const hit = raycast.castClick(ui.linkToolActive)
 
-    if (ui.linkToolActive && hit.deviceId) {
+    if (ui.mode === 'edit' && ui.linkToolActive && hit.deviceId) {
       linkDrag.onMouseDown(hit.deviceId, e)
       _isDragCandidate = true
       scene.controls.enabled = false
       return
     }
 
-    if (hit.linkHandleId) {
+    if (ui.mode === 'edit' && hit.linkHandleId) {
       dragMove.onMouseDown(hit.linkHandleId, 'linkHandle', e)
       _isDragCandidate = true
       scene.controls.enabled = false
@@ -351,7 +448,7 @@ export function useNmsEditor() {
     if (!_canvas) return
     raycast.updatePointer(e, _canvas)
 
-    if (_gizmoAxis && _gizmoStartDrag && _gizmoStartPos) {
+    if (ui.mode === 'edit' && _gizmoAxis && _gizmoStartDrag && _gizmoStartPos) {
       const cur = (_gizmoAxis === 'y')
         ? _verticalPlanePoint(e, _gizmoStartPos)
         : raycast.getGroundPoint(e, _canvas)
@@ -378,12 +475,12 @@ export function useNmsEditor() {
       return
     }
 
-    if (ui.linkToolActive && linkDrag.isDrawing) {
+    if (ui.mode === 'edit' && ui.linkToolActive && linkDrag.isDrawing) {
       linkDrag.onMouseMove(e, _canvas)
       return
     }
 
-    if (dragMove.hasPending) {
+    if (ui.mode === 'edit' && dragMove.hasPending) {
       const newPos = dragMove.onMouseMove(e, _canvas, scene.camera)
       if (newPos && dragMove.isDragging) {
         const target = dragMove.currentTarget
@@ -399,14 +496,14 @@ export function useNmsEditor() {
       }
     }
 
-    if (gizmo.isVisible && gizmo.isHovering(raycast.currentPointer, scene.camera)) {
+    if (ui.mode === 'edit' && gizmo.isVisible && gizmo.isHovering(raycast.currentPointer, scene.camera)) {
       ui.hideTooltip()
       _canvas.style.cursor = 'move'
       return
     }
 
     // hover tooltip
-    const hit = raycast.castHover(0)
+    const hit = raycast.castHover(24)
     if (hit.deviceId) {
       ui.showTooltipAt(e.clientX, e.clientY, hit.deviceId)
       _canvas.style.cursor = ui.linkToolActive ? 'crosshair' : 'pointer'
@@ -424,7 +521,7 @@ export function useNmsEditor() {
 
     scene.controls.enabled = true
 
-    if (_gizmoAxis) {
+    if (ui.mode === 'edit' && _gizmoAxis) {
       const t   = gizmo.currentTarget
       const pos = gizmo.position
       if (t?.type === 'device') {
@@ -459,13 +556,13 @@ export function useNmsEditor() {
     raycast.updatePointer(e, _canvas)
     const hit = raycast.castClick(ui.linkToolActive)
 
-    if (ui.linkToolActive && linkDrag.isDrawing) {
+    if (ui.mode === 'edit' && ui.linkToolActive && linkDrag.isDrawing) {
       linkDrag.onMouseUp(hit.deviceId ?? null, e)
       _isDragCandidate = false
       return
     }
 
-    if (dragMove.hasPending) {
+    if (ui.mode === 'edit' && dragMove.hasPending) {
       const result = dragMove.onMouseUp(e, _canvas, scene.camera)
       if (result) {
         const { targetId, targetType, newPos } = result
@@ -520,9 +617,12 @@ export function useNmsEditor() {
       return
     }
     if (e.key === 'f' || e.key === 'F') { camera.flyToOverview(); return }
-    if ((e.key === 'l' || e.key === 'L') && !isInputFocused()) { ui.toggleLinkTool(); return }
+    if ((e.key === 'l' || e.key === 'L') && !isInputFocused()) {
+      if (ui.mode === 'edit') ui.toggleLinkTool()
+      return
+    }
 
-    if ((e.key === 'Delete' || e.key === 'Backspace') && !isInputFocused()) {
+    if (ui.mode === 'edit' && (e.key === 'Delete' || e.key === 'Backspace') && !isInputFocused()) {
       e.preventDefault()
       const sel = ui.selection
       if (!sel) return
@@ -594,6 +694,10 @@ export function useNmsEditor() {
 
   function dropDeviceAt(deviceId: string, e: DragEvent) {
     if (!_canvas) return
+    if (ui.mode !== 'edit') {
+      ui.addToast('Switch to Edit mode to place devices', 'warning')
+      return
+    }
     const rect = _canvas.getBoundingClientRect()
     const ndc  = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width)  * 2 - 1,
@@ -624,6 +728,11 @@ export function useNmsEditor() {
   }
 
   function confirmCreateLink(srcId: string, tgtId: string, type: EdgeType) {
+    if (ui.mode !== 'edit') {
+      ui.addToast('Switch to Edit mode to create links', 'warning')
+      useUIStore().hideContextMenu()
+      return
+    }
     const id = `link-${Date.now()}`
     editor.addLink({ id, sourceDeviceId: srcId, targetDeviceId: tgtId, type, source: 'manual', status: 'up' })
     editor.logChange('topology.link.create', `Link created: ${type}`)
@@ -702,21 +811,30 @@ export function useNmsEditor() {
 
   function dispose() {
     _mounted = false
+    _watchStops.splice(0).forEach(stop => stop())
     _canvas?.removeEventListener('pointerdown', onPointerDown)
     _canvas?.removeEventListener('pointermove', onPointerMove)
     _canvas?.removeEventListener('pointerup',   onPointerUp)
+    _canvas?.removeEventListener('contextmenu', onContextMenu)
     window.removeEventListener('keydown', onKeyDown)
     gizmo?.dispose()
     device?.dispose(); space?.dispose(); link?.dispose()
     particle?.dispose(); blast?.dispose(); vnode?.dispose(); flash?.dispose()
     scene.dispose()
+    _canvas = null
+    _prevStatus.clear()
+  }
+
+  function onContextMenu(e: MouseEvent) {
+    e.preventDefault()
   }
 
   return {
-    init, dispose,
+    configure, init, dispose,
     dropDeviceAt, confirmCreateLink,
     saveCurrentView, loadSavedView,
     focusVirtualNode, onTimelineScrub, refreshSpace, rebuildAll,
+    timeline,
     getScene: () => scene,
   }
 }

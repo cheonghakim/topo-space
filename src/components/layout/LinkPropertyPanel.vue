@@ -25,7 +25,7 @@
         </div>
       </section>
 
-      <section class="section" v-if="link.source === 'manual'">
+      <section class="section" v-if="ui.mode === 'edit' && link.source === 'manual'">
         <div class="sec-title">Edit</div>
         <div class="edit-form">
           <label>Status
@@ -73,11 +73,13 @@ const editLabel  = ref('')
 watch(link, l => { editStatus.value = l?.status ?? 'up'; editLabel.value = l?.label ?? '' }, { immediate: true })
 
 function save() {
+  if (ui.mode !== 'edit') return
   if (!link.value) return
   editor.updateLink(link.value.id, { status: editStatus.value, label: editLabel.value || undefined })
 }
 
 function deleteLink() {
+  if (ui.mode !== 'edit') return
   if (!link.value) return
   editor.removeLink(link.value.id)
   ui.select(null)

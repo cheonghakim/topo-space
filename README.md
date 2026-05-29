@@ -1,4 +1,4 @@
-# topospace
+# Topospace
 
 A 3D infrastructure topology editor for network/server visualization, built with Vue 3, TypeScript, Vite and Three.js. Devices, spaces (site / zone / rack), and links are rendered in a 3D scene that you can navigate, edit, and monitor in real time.
 
@@ -29,13 +29,13 @@ npm run preview  # preview the production build
 
 ### Keyboard shortcuts
 
-| Key | Action |
-| --- | --- |
-| `F` | Fit view (reset camera) |
-| `ESC` | Clear selection / cancel current tool |
-| `L` | Toggle Connect mode |
+| Key                 | Action                                    |
+| ------------------- | ----------------------------------------- |
+| `F`                 | Fit view (reset camera)                   |
+| `ESC`               | Clear selection / cancel current tool     |
+| `L`                 | Toggle Connect mode                       |
 | `Del` / `Backspace` | Delete the selected device / link / space |
-| `Ctrl+Z` / `Ctrl+Y` | Undo / Redo |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / Redo                               |
 
 Full in-app help is available from the **Help** button in the top bar (EN / KO).
 
@@ -80,13 +80,13 @@ npm run preview  # 빌드 결과 미리보기
 
 ### 단축키
 
-| 키 | 동작 |
-| --- | --- |
-| `F` | 전체 보기 (카메라 리셋) |
-| `ESC` | 선택 해제 / 현재 도구 취소 |
-| `L` | 연결(Connect) 모드 토글 |
+| 키                  | 동작                           |
+| ------------------- | ------------------------------ |
+| `F`                 | 전체 보기 (카메라 리셋)        |
+| `ESC`               | 선택 해제 / 현재 도구 취소     |
+| `L`                 | 연결(Connect) 모드 토글        |
 | `Del` / `Backspace` | 선택한 장비 / 링크 / 공간 삭제 |
-| `Ctrl+Z` / `Ctrl+Y` | 실행 취소 / 다시 실행 |
+| `Ctrl+Z` / `Ctrl+Y` | 실행 취소 / 다시 실행          |
 
 상단 바의 **Help** 버튼에서 앱 내 도움말(한/영)을 볼 수 있습니다.
 

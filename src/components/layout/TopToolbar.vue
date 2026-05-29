@@ -25,7 +25,12 @@
       <button :class="['mode-btn', ui.mode === 'edit' ? 'active' : '']" @click="ui.setMode('edit')">Edit</button>
     </div>
 
-    <button :class="['btn', ui.linkToolActive ? 'btn-accent-on' : 'btn-accent']" @click="ui.toggleLinkTool()" title="Connect devices (L)">
+    <button
+      :class="['btn', ui.linkToolActive ? 'btn-accent-on' : 'btn-accent']"
+      :disabled="ui.mode !== 'edit'"
+      @click="ui.toggleLinkTool()"
+      title="Connect devices (L)"
+    >
       Connect
     </button>
 
@@ -87,6 +92,7 @@ const statusFilter = computed({
   white-space: nowrap; flex-shrink: 0; transition: all .12s;
 }
 .btn:hover { border-color: #3b82f6; color: #e2e8f0; }
+.btn:disabled { cursor: not-allowed; opacity: .45; border-color: #1e3a5a; color: #64748b; background: #0f172a; }
 .btn-on { border-color: #22c55e; color: #4ade80; }
 .btn-accent { border-color: #4338ca; color: #a5b4fc; background: #1e1b4b; }
 .btn-accent-on { border-color: #6366f1; color: #c7d2fe; background: #3730a3; }

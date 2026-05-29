@@ -2,12 +2,12 @@
   <aside class="panel">
     <div class="panel-head">
       <span>Unmapped Devices <b>{{ editor.unmappedDevices.length }}</b></span>
-      <button class="text-btn" @click="showAdd = !showAdd" title="Add device manually">Add</button>
+      <button v-if="ui.mode === 'edit'" class="text-btn" @click="showAdd = !showAdd" title="Add device manually">Add</button>
       <button class="close-btn" @click="ui.showUnmapped = false" title="Close">✕</button>
     </div>
 
     <Transition name="fade">
-      <div v-if="showAdd" class="add-form">
+      <div v-if="ui.mode === 'edit' && showAdd" class="add-form">
         <input v-model="form.hostname" class="add-input" placeholder="Hostname *" @keydown.enter="submitAdd" />
         <input v-model="form.ip" class="add-input" placeholder="IP address" @keydown.enter="submitAdd" />
         <div class="add-row">
@@ -29,10 +29,10 @@
         v-for="dev in editor.unmappedDevices"
         :key="dev.id"
         class="dev-row"
-        draggable="true"
+        :draggable="ui.mode === 'edit'"
         @dragstart="onDragStart($event, dev.id)"
         @dragend="onDragEnd"
-        :class="{ dragging: draggingId === dev.id }"
+        :class="{ dragging: draggingId === dev.id, readonly: ui.mode !== 'edit' }"
       >
         <span class="type-tag" :style="{ color: DEVICE_TYPE_COLOR[dev.normalizedType ?? 'unknown'], borderColor: DEVICE_TYPE_COLOR[dev.normalizedType ?? 'unknown'] }">
           {{ DEVICE_TYPE_ABBR[dev.normalizedType ?? 'unknown'] }}
@@ -42,12 +42,12 @@
           <div class="dev-ip">{{ dev.ip ?? '—' }}</div>
         </div>
         <span class="dev-source">{{ dev.source }}</span>
-        <button class="ignore-btn" @click.stop="ignoreDevice(dev.id)" title="Ignore">✕</button>
+        <button v-if="ui.mode === 'edit'" class="ignore-btn" @click.stop="ignoreDevice(dev.id)" title="Ignore">✕</button>
       </div>
     </div>
 
     <div class="panel-footer">
-      <span class="hint">Drag a device onto the 3D scene to place it.</span>
+      <span class="hint">{{ ui.mode === 'edit' ? 'Drag a device onto the 3D scene to place it.' : 'Switch to Edit mode to place devices.' }}</span>
     </div>
   </aside>
 </template>
@@ -74,6 +74,7 @@ const form = reactive<{ hostname: string; ip: string; type: DeviceType; vendor: 
 })
 
 function submitAdd() {
+  if (ui.mode !== 'edit') return
   if (!form.hostname.trim()) return
   editor.addManualDevice({
     hostname: form.hostname.trim(),
@@ -87,6 +88,10 @@ function submitAdd() {
 }
 
 function onDragStart(e: DragEvent, deviceId: string) {
+  if (ui.mode !== 'edit') {
+    e.preventDefault()
+    return
+  }
   draggingId.value = deviceId
   e.dataTransfer?.setData('deviceId', deviceId)
   e.dataTransfer!.effectAllowed = 'move'
@@ -97,6 +102,7 @@ function onDragEnd() {
 }
 
 function ignoreDevice(deviceId: string) {
+  if (ui.mode !== 'edit') return
   const idx = editor.unmappedDevices.findIndex(d => d.id === deviceId)
   if (idx >= 0) editor.unmappedDevices.splice(idx, 1)
 }
@@ -148,6 +154,7 @@ function ignoreDevice(deviceId: string) {
 }
 .dev-row:hover    { background: rgba(59,130,246,.08); }
 .dev-row.dragging { opacity: 0.4; }
+.dev-row.readonly { cursor: default; }
 .type-tag {
   font-size: 9px; font-weight: 700; font-family: monospace;
   border: 1px solid; border-radius: 3px; padding: 1px 0; text-align: center;
