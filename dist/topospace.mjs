@@ -3146,11 +3146,11 @@ var ai = class {
 		let a = document.createElement("div");
 		a.className = "space-badge", a.style.cssText = "\n      background:rgba(9,13,24,.90);border:1px solid #2a4a8a;border-radius:5px;\n      padding:2px 7px;font-size:10px;font-family:monospace;color:#94a3b8;\n      white-space:nowrap;pointer-events:none;", a.textContent = e.name;
 		let o = new Kr(a);
-		o.position.set(0, e.type === "rack" ? 1 : .8, 0), o.visible = this.shouldShowBadge(e.type), n.add(o);
+		o.position.set(0, e.type === "rack" ? 1 : .8, 0), o.visible = this.shouldShowBadge(e.type, e.source), n.add(o);
 		let s = e.type === "rack" ? .25 : .4, c = new P.BoxGeometry(i.width, s, i.depth);
 		c.computeBoundsTree();
 		let l = new P.Mesh(c, new P.MeshBasicMaterial({ visible: !1 }));
-		l.position.y = s / 2, l.userData.spaceId = e.id, l.userData.spaceType = e.type, n.add(l), this.scene.add(n), this.objects.set(e.id, {
+		l.position.y = s / 2, l.userData.spaceId = e.id, l.userData.spaceType = e.type, l.userData.spaceSource = e.source, n.add(l), this.scene.add(n), this.objects.set(e.id, {
 			group: n,
 			hitMesh: l,
 			badgeEl: a,
@@ -3225,6 +3225,8 @@ var ai = class {
 			let e = r.material;
 			e.emissive = t ? new P.Color(22015) : new P.Color(0), e.emissiveIntensity = t ? .3 : 0;
 		}
+		let i = n.hitMesh.userData.spaceType, a = n.hitMesh.userData.spaceSource;
+		n.badge.visible = t || this.shouldShowBadge(i, a);
 	}
 	updateBadge(e, t) {
 		let n = this.objects.get(e);
@@ -3232,8 +3234,8 @@ var ai = class {
 	}
 	applyBadgeLod() {
 		this.objects.forEach((e) => {
-			let t = e.hitMesh.userData.spaceType;
-			e.badge.visible = this.shouldShowBadge(t);
+			let t = e.hitMesh.userData.spaceType, n = e.hitMesh.userData.spaceSource;
+			e.badge.visible = this.shouldShowBadge(t, n);
 		});
 	}
 	setPosition(e, t) {
@@ -3251,9 +3253,9 @@ var ai = class {
 		let t = this.objects.get(e);
 		return t ? t.group.position.clone() : new P.Vector3();
 	}
-	shouldShowBadge(e) {
-		let t = this.objects.size;
-		return e === "site" ? !0 : t > 120 ? !1 : t > 60 ? e !== "rack" : e === "rack" || e === "zone" || e === "cloud";
+	shouldShowBadge(e, t) {
+		let n = this.objects.size;
+		return e === "site" ? !0 : e === "rack" && t === "import" || n > 120 ? !1 : n > 60 ? e !== "rack" : e === "zone" || e === "cloud";
 	}
 	dispose() {
 		this.objects.forEach((e) => this.disposeSpaceObject(e)), this.objects.clear();

@@ -56,5 +56,6 @@ test('does not leave stale rack labels after CSV replace import', async ({ page 
 
   const after = await page.locator('.space-badge').count()
   expect(after).toBeLessThan(before)
-  await expect(page.locator('.space-badge', { hasText: 'Rack-A' })).toHaveCount(1)
+  await expect(page.locator('.space-badge', { hasText: 'Rack-A' })).toHaveCount(0)
+  await expect(page.locator('.space-badge', { hasText: 'Imported' })).toHaveCount(1)
 })

@@ -53,7 +53,7 @@ export class SpaceRenderer {
 
     const badge = new CSS2DObject(badgeEl)
     badge.position.set(0, (space.type === 'rack' ? 1.0 : 0.8), 0)
-    badge.visible = this.shouldShowBadge(space.type)
+    badge.visible = this.shouldShowBadge(space.type, space.source)
     group.add(badge)
 
     const hitH = space.type === 'rack' ? 0.25 : 0.4
@@ -63,6 +63,7 @@ export class SpaceRenderer {
     hitMesh.position.y = hitH / 2
     hitMesh.userData.spaceId = space.id
     hitMesh.userData.spaceType = space.type
+    hitMesh.userData.spaceSource = space.source
     group.add(hitMesh)
 
     this.scene.add(group)
@@ -142,6 +143,9 @@ export class SpaceRenderer {
       mat.emissive    = on ? new THREE.Color(0x0055ff) : new THREE.Color(0x000000)
       mat.emissiveIntensity = on ? 0.3 : 0
     }
+    const type = obj.hitMesh.userData.spaceType as Space['type']
+    const source = obj.hitMesh.userData.spaceSource as Space['source'] | undefined
+    obj.badge.visible = on || this.shouldShowBadge(type, source)
   }
 
   updateBadge(spaceId: string, text: string) {
@@ -152,7 +156,8 @@ export class SpaceRenderer {
   applyBadgeLod() {
     this.objects.forEach((obj) => {
       const type = obj.hitMesh.userData.spaceType as Space['type']
-      obj.badge.visible = this.shouldShowBadge(type)
+      const source = obj.hitMesh.userData.spaceSource as Space['source'] | undefined
+      obj.badge.visible = this.shouldShowBadge(type, source)
     })
   }
 
@@ -180,9 +185,10 @@ export class SpaceRenderer {
     return obj.group.position.clone()
   }
 
-  private shouldShowBadge(type: Space['type']): boolean {
+  private shouldShowBadge(type: Space['type'], source?: Space['source']): boolean {
     const count = this.objects.size
     if (type === 'site') return true
+    if (type === 'rack' && source === 'import') return false
     if (count > 120) return false
     if (count > 60) return type !== 'rack'
     return type === 'rack' || type === 'zone' || type === 'cloud'
