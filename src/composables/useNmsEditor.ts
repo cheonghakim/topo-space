@@ -367,10 +367,12 @@ export function useNmsEditor() {
         if (t?.type === 'device') {
           device.setPosition(t.id, newPos)
           link.refreshPositions(id => device.getDeviceWorldPos(id))
+          _syncParticles()
         } else if (t?.type === 'space') {
           space.setPosition(t.id, newPos)
           _spaceChildren.forEach(c => device.setPosition(c.id, newPos.clone().add(c.offset)))
           link.refreshPositions(id => device.getDeviceWorldPos(id))
+          _syncParticles()
         }
       }
       return
@@ -659,6 +661,34 @@ export function useNmsEditor() {
     Object.entries(frame.states).forEach(([id, s]) => editor.updateDeviceStatus(id, s.status, s.metrics))
   }
 
+  function rebuildAll() {
+    space.dispose()
+    space = new SpaceRenderer(scene.scene)
+    space.loadSpaces([...editor.spaces.values()])
+
+    device.dispose()
+    device = new DeviceRenderer(scene.scene)
+    device.loadInstanced(
+      [...editor.devices.values()],
+      editor.mappings,
+      id => editor.getMappingByDeviceId(id),
+    )
+
+    link.dispose()
+    link = new LinkRenderer(scene.scene)
+    link.loadLinks([...editor.links.values()], id => device.getDeviceWorldPos(id))
+    const allTypes: EdgeType[] = ['physical','logical','service_dependency','traffic_flow','security_path','manual','inferred']
+    allTypes.forEach(t => link.setVisible(t, ui.visibleLinkTypes.has(t)))
+
+    _syncParticles()
+
+    raycast  = new RaycastManager(scene.camera, device, space, link)
+    linkDrag = new LinkDragManager(scene.camera, link, device,
+      (srcId, tgtId, mx, my) => useUIStore().showContextMenu(mx, my, srcId, tgtId))
+
+    camera.flyToOverview()
+  }
+
   function refreshSpace(spaceId: string) {
     const sp = editor.spaces.get(spaceId)
     space.removeSpace(spaceId)
@@ -686,7 +716,7 @@ export function useNmsEditor() {
     init, dispose,
     dropDeviceAt, confirmCreateLink,
     saveCurrentView, loadSavedView,
-    focusVirtualNode, onTimelineScrub, refreshSpace,
+    focusVirtualNode, onTimelineScrub, refreshSpace, rebuildAll,
     getScene: () => scene,
   }
 }

@@ -1,5 +1,6 @@
 <template>
   <div class="app">
+    <AppMenuBar />
     <TopToolbar />
 
     <div class="workspace">
@@ -52,6 +53,8 @@
 
     <HelpPanel />
 
+    <ImportPanel />
+
     <Transition name="fade">
       <div v-if="ui.blastSourceId" class="blast-banner">
         Impact radius
@@ -64,6 +67,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import AppMenuBar          from '@/components/layout/AppMenuBar.vue'
 import TopToolbar          from '@/components/layout/TopToolbar.vue'
 import RackServerListPanel from '@/components/layout/RackServerListPanel.vue'
 import SpaceTreePanel    from '@/components/layout/SpaceTreePanel.vue'
@@ -80,6 +84,7 @@ import SceneCanvas       from '@/components/scene/SceneCanvas.vue'
 import ContextMenu       from '@/components/ui/ContextMenu.vue'
 import ToastPanel        from '@/components/ui/ToastPanel.vue'
 import HelpPanel         from '@/components/ui/HelpPanel.vue'
+import ImportPanel       from '@/components/ui/ImportPanel.vue'
 import { useUIStore }    from '@/stores/ui'
 import { useEditorStore } from '@/stores/editor'
 import { useNmsEditor, timeline } from '@/composables/useNmsEditor'
@@ -133,11 +138,14 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: #080c18; }
 select option { background: #0f172a; color: #e2e8f0; }
 
 /* User-adjustable UI text scale (canvas and pointer-anchored overlays excluded). */
+.menubar,
 .toolbar,
+.menu-dropdown,
 .left-dock,
 .right-dock,
 .tl-panel,
-.help-modal { zoom: var(--ui-fs, 1.1); }
+.help-modal,
+.imp-modal { zoom: var(--ui-fs, 1.1); }
 </style>
 
 <style scoped>
@@ -147,7 +155,7 @@ select option { background: #0f172a; color: #e2e8f0; }
   font-family: -apple-system, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-.workspace { display: flex; flex: 1; overflow: hidden; }
+.workspace { display: flex; flex: 1; overflow: hidden; position: relative; }
 .canvas-wrap { flex: 1; position: relative; min-width: 0; }
 
 .left-dock {
@@ -156,14 +164,17 @@ select option { background: #0f172a; color: #e2e8f0; }
   border-right: 1px solid #1a2a4a;
   background: rgba(8, 12, 24, 0.96);
 }
+/* Right dock floats over the canvas and only takes the height of its content.
+   When its panels are short, the canvas behind it stays visible — no awkward
+   empty space below. */
 .right-dock {
-  flex: 0 0 290px;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
+  position: absolute; top: 0; right: 0;
+  width: 290px; max-height: 100%;
+  display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
   border-left: 1px solid #1a2a4a;
   background: rgba(8, 12, 24, 0.96);
+  z-index: 80;
 }
 .right-dock::-webkit-scrollbar { width: 5px; }
 

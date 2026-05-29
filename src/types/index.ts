@@ -88,7 +88,7 @@ export interface NetworkLink {
   type: EdgeType
   status?: 'up' | 'down' | 'unknown'
   bandwidth?: number
-  source: 'discovered' | 'manual' | 'cmdb' | 'inferred'
+  source: 'discovered' | 'manual' | 'cmdb' | 'inferred' | 'import'
   confidence?: 'high' | 'medium' | 'low'
   lastUpdatedAt?: string
   label?: string

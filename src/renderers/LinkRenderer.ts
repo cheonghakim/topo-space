@@ -2,7 +2,8 @@ import * as THREE from 'three'
 import type { NetworkLink, EdgeType } from '@/types'
 import { LINK_STYLE } from '@/utils/colorUtils'
 
-const LINK_Y = 0.45
+const LINK_Y     = 0.45   // fallback height (preview / ground plane)
+const ENDPOINT_LIFT = 0.1 // raise the link slightly above the device top
 
 interface LinkObj {
   group:    THREE.Group
@@ -25,15 +26,23 @@ export class LinkRenderer {
     links.forEach(l => this.addLink(l, getPos))
   }
 
-  // a → (ax,midZ) → (midX,midZ) → (midX,bz) → b
+  // Endpoints follow each device's Y; the middle corner uses the average so the
+  // path smoothly tilts when devices are at different heights.
   private buildPath(a: THREE.Vector3, b: THREE.Vector3, midX: number, midZ: number): THREE.Vector3[] {
+    const aY  = a.y + ENDPOINT_LIFT
+    const bY  = b.y + ENDPOINT_LIFT
+    const midY = (aY + bY) / 2
     return [
-      new THREE.Vector3(a.x,  LINK_Y, a.z),
-      new THREE.Vector3(a.x,  LINK_Y, midZ),
-      new THREE.Vector3(midX, LINK_Y, midZ),
-      new THREE.Vector3(midX, LINK_Y, b.z),
-      new THREE.Vector3(b.x,  LINK_Y, b.z),
+      new THREE.Vector3(a.x,  aY,   a.z),
+      new THREE.Vector3(a.x,  midY, midZ),
+      new THREE.Vector3(midX, midY, midZ),
+      new THREE.Vector3(midX, midY, b.z),
+      new THREE.Vector3(b.x,  bY,   b.z),
     ]
+  }
+
+  private midY(a: THREE.Vector3, b: THREE.Vector3): number {
+    return ((a.y + b.y) / 2) + ENDPOINT_LIFT
   }
 
   addLink(link: NetworkLink, getPos: (id: string) => THREE.Vector3 | null) {
@@ -64,7 +73,7 @@ export class LinkRenderer {
       color: 0x60a5fa, transparent: true, opacity: 0.6, depthTest: false,
     })
     const handle = new THREE.Mesh(handleGeo, handleMat)
-    handle.position.set(midX, LINK_Y, midZ)
+    handle.position.set(midX, this.midY(aPos, bPos), midZ)
     handle.renderOrder = 800
     handle.userData.linkHandleId = link.id
     handle.userData.linkId       = link.id
@@ -100,7 +109,7 @@ export class LinkRenderer {
     obj.path = newPath
     obj.line.geometry.setFromPoints(newPath)
     obj.line.computeLineDistances()
-    obj.handle.position.set(newX, LINK_Y, newZ)
+    obj.handle.position.set(newX, this.midY(obj.endpoints.a, obj.endpoints.b), newZ)
   }
 
   refreshPositions(getPos: (id: string) => THREE.Vector3 | null) {
@@ -114,9 +123,19 @@ export class LinkRenderer {
       const midZ = obj.link.midZ ?? (a.z + b.z) / 2
       const newPath = this.buildPath(a, b, midX, midZ)
       obj.path = newPath
-      obj.line.geometry.setFromPoints(newPath)
+
+      // Explicit buffer replacement to guarantee the GPU sees the new vertices.
+      const posArr = new Float32Array(newPath.length * 3)
+      for (let i = 0; i < newPath.length; i++) {
+        posArr[i * 3]     = newPath[i].x
+        posArr[i * 3 + 1] = newPath[i].y
+        posArr[i * 3 + 2] = newPath[i].z
+      }
+      obj.line.geometry.setAttribute('position', new THREE.BufferAttribute(posArr, 3))
+      obj.line.geometry.computeBoundingSphere()
       obj.line.computeLineDistances()
-      obj.handle.position.set(midX, LINK_Y, midZ)
+
+      obj.handle.position.set(midX, this.midY(a, b), midZ)
     })
   }
 
