@@ -23,6 +23,7 @@
   "sideEffects": [
     "**/*.css"
   ],
+  "license": "MIT",
   "author": "cheonghakim",
   "repository": {
     "type": "git",
