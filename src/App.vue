@@ -133,9 +133,10 @@ watch(() => ui.fontScale, (v) => {
 
 <style>
 .app, .app * { box-sizing: border-box; }
-.app ::-webkit-scrollbar { width: 5px; height: 5px; }
+.app ::-webkit-scrollbar { width: 3px; height: 3px; }
 .app ::-webkit-scrollbar-track { background: transparent; }
-.app ::-webkit-scrollbar-thumb { background: #1e3a5a; border-radius: 3px; }
+.app ::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 2px; }
+.app ::-webkit-scrollbar-thumb:hover { background: #243656; }
 .app select option { background: #0f172a; color: #e2e8f0; }
 
 /* User-adjustable UI text scale (canvas and pointer-anchored overlays excluded). */
@@ -177,7 +178,7 @@ watch(() => ui.fontScale, (v) => {
   background: rgba(8, 12, 24, 0.96);
   z-index: 80;
 }
-.right-dock::-webkit-scrollbar { width: 5px; }
+.right-dock::-webkit-scrollbar { width: 3px; }
 
 .fade-enter-active, .fade-leave-active { transition: opacity .2s; }
 .fade-enter-from, .fade-leave-to       { opacity: 0; }

@@ -85,7 +85,8 @@ function triggerImport() {
 }
 
 function onImport(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
   if (!file) return
   const reader = new FileReader()
   reader.onload = (ev) => {
@@ -94,6 +95,7 @@ function onImport(e: Event) {
       editor.importSnapshot(snap)
       editor.logChange('import', `Layout imported: ${file.name}`)
     } catch { alert('Invalid file format') }
+    finally { input.value = '' }
   }
   reader.readAsText(file)
 }

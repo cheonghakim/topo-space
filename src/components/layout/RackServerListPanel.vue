@@ -94,7 +94,7 @@ function close() {
 .chip.n    { color: #4ade80; }
 .close-btn { background: none; border: none; color: #475569; cursor: pointer; }
 .hint { padding: 6px 12px; color: #334155; font-size: 10px; border-bottom: 1px solid #0f1f3a; flex-shrink: 0; }
-.server-list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #1e3a5a transparent; }
+.server-list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #1a2a4a transparent; }
 .srv-row {
   display: flex; align-items: center; gap: 6px;
   padding: 6px 12px; border-bottom: 1px solid rgba(255,255,255,.03);

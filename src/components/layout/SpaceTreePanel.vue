@@ -166,10 +166,12 @@
 import { ref, computed } from "vue";
 import { useEditorStore } from "@/stores/editor";
 import { useUIStore } from "@/stores/ui";
+import { useNmsEditor } from "@/composables/useNmsEditor";
 import type { Space, SpaceType } from "@/types";
 
 const editor = useEditorStore();
 const ui = useUIStore();
+const { refreshSpace } = useNmsEditor();
 
 const openNodes = ref(new Set<string>());
 const showAdd = ref(false);
@@ -297,8 +299,10 @@ function startEdit(space: Space) {
 function confirmEdit() {
   if (ui.mode !== "edit") return;
   if (!editingSpace.value) return;
-  editor.updateSpace(editingSpace.value.id, { name: editName.value });
+  const id = editingSpace.value.id;
+  editor.updateSpace(id, { name: editName.value });
   editor.logChange("space.update", `Space renamed: ${editName.value}`);
+  refreshSpace(id);
   editingSpace.value = null;
 }
 
@@ -306,6 +310,7 @@ function archiveSpace(id: string) {
   if (ui.mode !== "edit") return;
   if (!confirm("Archive this space?")) return;
   editor.archiveSpace(id);
+  refreshSpace(id);
   editor.logChange("space.archive", `Space archived: ${id}`);
 }
 </script>
@@ -352,7 +357,7 @@ function archiveSpace(id: string) {
   flex: 1;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: #1e3a5a transparent;
+  scrollbar-color: #1a2a4a transparent;
 }
 .tree-row {
   display: flex;

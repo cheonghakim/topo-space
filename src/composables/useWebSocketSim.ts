@@ -71,7 +71,7 @@ export function useWebSocketSim() {
       if (!link) return
       const newStatus = Math.random() > 0.15 ? 'up' : 'down'
       if (newStatus !== link.status) {
-        editor.updateLink(id, { status: newStatus as 'up' | 'down' })
+        editor.updateLinkStatus(id, newStatus as 'up' | 'down')
         if (newStatus === 'down') {
           ui.addToast(`Link DOWN (${link.type})`, 'critical')
           log(`Link DOWN: ${link.type}`)

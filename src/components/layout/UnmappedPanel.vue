@@ -145,7 +145,7 @@ function ignoreDevice(deviceId: string) {
 .add-ok:hover { background: #2a4a8a; }
 .fade-enter-active, .fade-leave-active { transition: opacity .15s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
-.device-list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #1e3a5a transparent; }
+.device-list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #1a2a4a transparent; }
 .dev-row {
   display: grid; grid-template-columns: 34px 1fr auto 18px;
   align-items: center; gap: 6px;

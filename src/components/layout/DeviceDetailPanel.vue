@@ -180,7 +180,7 @@ function ts() { return new Date().toLocaleTimeString() }
 .status-badge.maintenance  { background: #1e3a5f; color: #93c5fd; }
 .status-badge.stale        { background: #1e1a18; color: #78716c; }
 .close-btn { background: none; border: none; color: #475569; cursor: pointer; margin-left: 4px; }
-.panel-body { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #1e3a5a transparent; }
+.panel-body { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #1a2a4a transparent; }
 .section    { padding: 10px 12px; border-bottom: 1px solid #0f1f3a; }
 .sec-title  { color: #475569; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 7px; font-weight: 600; }
 .sec-title.clickable { cursor: pointer; display: flex; align-items: center; gap: 6px; user-select: none; }

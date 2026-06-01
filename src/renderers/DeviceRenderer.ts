@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { RawDevice, DeviceMapping, DeviceType, DeviceStatus } from '@/types'
 import { STATUS_COLOR_THREE, DEVICE_TYPE_COLOR } from '@/utils/colorUtils'
-import { getDeviceGeometry } from '@/utils/geometryFactory'
+import { getDeviceGeometry, disposeGeometryCache } from '@/utils/geometryFactory'
 
 const _matCache = new Map<DeviceType, THREE.MeshStandardMaterial>()
 
@@ -230,7 +230,9 @@ export class DeviceRenderer {
   dispose() {
     this.clearSearchLabels()
     this.instancedMeshes.forEach(mesh => {
-      mesh.geometry.dispose()
+      // Don't dispose mesh.geometry here — it's shared with the module-level
+      // geometry cache. disposeGeometryCache() handles cleanup and clears the
+      // cache so the next loadInstanced gets fresh geometries.
       ;(mesh.material as THREE.Material).dispose()
       this.scene.remove(mesh)
     })
@@ -238,6 +240,7 @@ export class DeviceRenderer {
     this.instanceIndex.clear()
     _matCache.forEach(m => m.dispose())
     _matCache.clear()
+    disposeGeometryCache()
   }
 
   private clearSearchLabels() {

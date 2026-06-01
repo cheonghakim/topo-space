@@ -50,8 +50,18 @@ function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') ui.hideContextMenu()
 }
 
-onMounted(()        => document.addEventListener('keydown', onKeyDown))
-onBeforeUnmount(()  => document.removeEventListener('keydown', onKeyDown))
+function onDocMouseDown(e: MouseEvent) {
+  if (!(e.target as HTMLElement).closest('.ctx-menu')) ui.hideContextMenu()
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', onKeyDown)
+  document.addEventListener('mousedown', onDocMouseDown)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeyDown)
+  document.removeEventListener('mousedown', onDocMouseDown)
+})
 </script>
 
 <style scoped>

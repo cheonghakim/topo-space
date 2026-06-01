@@ -49,7 +49,7 @@ function entryClass(type: string) {
 .icon-btn  { background: none; border: 1px solid #1e3a5a; color: #64748b; cursor: pointer; font-size: 10px; padding: 2px 7px; border-radius: 4px; }
 .icon-btn:hover { color: #e2e8f0; border-color: #3b82f6; }
 .cl-empty  { padding: 12px; color: #475569; font-size: 11px; text-align: center; }
-.cl-list   { overflow-y: auto; scrollbar-width: thin; }
+.cl-list   { overflow-y: auto; scrollbar-width: thin; scrollbar-color: #1a2a4a transparent; }
 .cl-row    { display: grid; grid-template-columns: 90px 1fr auto; gap: 4px; align-items: baseline; padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,.03); font-size: 10px; }
 .cl-type   { font-family: monospace; border-radius: 3px; padding: 1px 4px; }
 .cl-type.device { background: #1e3a5f; color: #93c5fd; }

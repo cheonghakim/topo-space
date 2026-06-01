@@ -129,6 +129,12 @@ export const useEditorStore = defineStore('editor', () => {
     if (metrics) Object.assign(dev.metrics ??= {}, metrics)
   }
 
+  // Live data update — bypasses permission guard (same pattern as updateDeviceStatus).
+  function updateLinkStatus(id: string, status: NetworkLink['status']) {
+    const l = links.value.get(id)
+    if (l) l.status = status
+  }
+
   function upsertDevices(incoming: RawDevice[]) {
     incoming.forEach(dev => {
       if (!devices.value.has(dev.id)) {
@@ -513,7 +519,7 @@ export const useEditorStore = defineStore('editor', () => {
     mappedDeviceIds, criticalCount, warningCount,
     devicesBySpace, interfacesByDevice, rackSpaces, allSpacesList,
     configureSecurity, setEditorMode, can,
-    loadMockData, replaceData, updateDeviceStatus, upsertDevices, addManualDevice,
+    loadMockData, replaceData, updateDeviceStatus, updateLinkStatus, upsertDevices, addManualDevice,
     importTopology,
     addSpace, updateSpace, archiveSpace,
     mapDevice, unmapDevice, updateAnnotation,

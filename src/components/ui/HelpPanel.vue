@@ -248,7 +248,13 @@ const content: Record<"en" | "ko", Section[]> = {
 .help-body {
   padding: 8px 16px 16px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #1a2a4a transparent;
 }
+.help-body::-webkit-scrollbar { width: 3px; }
+.help-body::-webkit-scrollbar-track { background: transparent; }
+.help-body::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 2px; }
+.help-body::-webkit-scrollbar-thumb:hover { background: #243656; }
 .help-section {
   margin-top: 14px;
 }

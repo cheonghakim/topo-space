@@ -133,6 +133,8 @@ function onGroupClick(g: AlertGroup) {
   overflow-y: auto;
   overflow-x: hidden;
   flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #1a2a4a transparent;
 }
 
 .ap-head {

@@ -215,7 +215,11 @@ function clearScene() {
 }
 .text-btn:hover { border-color: #3b82f6; color: #e2e8f0; }
 
-.imp-body { padding: 8px 16px 16px; overflow-y: auto; }
+.imp-body { padding: 8px 16px 16px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #1a2a4a transparent; }
+.imp-body::-webkit-scrollbar { width: 3px; }
+.imp-body::-webkit-scrollbar-track { background: transparent; }
+.imp-body::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 2px; }
+.imp-body::-webkit-scrollbar-thumb:hover { background: #243656; }
 .imp-section { margin-top: 14px; }
 .step-title {
   color: #60a5fa; font-size: 12px; font-weight: 600;

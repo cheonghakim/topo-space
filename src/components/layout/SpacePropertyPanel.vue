@@ -79,6 +79,7 @@ function applyName() {
   if (ui.mode !== 'edit') return
   if (!space.value) return
   editor.updateSpace(space.value.id, { name: name.value })
+  refreshSpace(space.value.id)
 }
 
 function applySize() {
