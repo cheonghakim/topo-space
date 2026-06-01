@@ -103,5 +103,11 @@ export class ArrowGizmo {
 
   dispose() {
     this.scene.remove(this.group)
+    this.group.traverse(child => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose()
+        ;(child.material as THREE.Material).dispose()
+      }
+    })
   }
 }

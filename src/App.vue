@@ -6,7 +6,8 @@
     <div class="workspace">
       <!-- Left dock: device / space sources -->
       <aside class="left-dock" v-if="hasLeftPanel">
-        <RackServerListPanel v-if="ui.showRackServerList" />
+        <AlertPanel          v-if="ui.showAlertPanel" />
+        <RackServerListPanel v-else-if="ui.showRackServerList" />
         <SpaceTreePanel      v-else-if="ui.showSpaceTree" />
         <UnmappedPanel       v-else-if="ui.showUnmapped" />
       </aside>
@@ -69,6 +70,7 @@
 import { ref, computed, watch } from 'vue'
 import AppMenuBar          from '@/components/layout/AppMenuBar.vue'
 import TopToolbar          from '@/components/layout/TopToolbar.vue'
+import AlertPanel          from '@/components/layout/AlertPanel.vue'
 import RackServerListPanel from '@/components/layout/RackServerListPanel.vue'
 import SpaceTreePanel    from '@/components/layout/SpaceTreePanel.vue'
 import UnmappedPanel     from '@/components/layout/UnmappedPanel.vue'
@@ -118,7 +120,7 @@ const blastDeviceName = computed(() => {
 })
 
 const hasLeftPanel = computed(() =>
-  ui.showRackServerList || ui.showSpaceTree || ui.showUnmapped)
+  ui.showAlertPanel || ui.showRackServerList || ui.showSpaceTree || ui.showUnmapped)
 
 const hasRightPanel = computed(() =>
   !!ui.selectedDeviceId || !!ui.selectedLinkId || !!ui.selectedSpaceId ||

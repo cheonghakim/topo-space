@@ -232,7 +232,7 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
           ui.showRackServerList  = false
         }
       } else if (sel.type === 'link') {
-        link.setSelected(sel.id)
+        link.setSelected(ui.mode === 'edit' ? sel.id : null)
       }
     }))
 
@@ -241,6 +241,7 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
       editor.setEditorMode(mode)
       if (mode === 'view') {
         gizmo?.detach()
+        link?.setSelected(null)
         linkDrag?.cancel()
         dragMove?.cancel()
         _gizmoAxis = null
@@ -502,12 +503,14 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
       return
     }
 
-    // hover tooltip
-    const hit = raycast.castHover(24)
-    if (hit.deviceId) {
-      ui.showTooltipAt(e.clientX, e.clientY, hit.deviceId)
+    // hover tooltip — use hoveredId maintained by the render loop to avoid
+    // throttle conflicts (a second castHover within the throttle window returns
+    // {} and incorrectly hides the tooltip).
+    const hov = ui.hoveredId
+    if (hov && editor.devices.has(hov)) {
+      ui.showTooltipAt(e.clientX, e.clientY, hov)
       _canvas.style.cursor = ui.linkToolActive ? 'crosshair' : 'pointer'
-    } else if (hit.linkHandleId || hit.linkId) {
+    } else if (hov) {
       ui.hideTooltip()
       _canvas.style.cursor = ui.mode === 'edit' ? 'move' : 'pointer'
     } else {
@@ -638,6 +641,7 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
         ui.select(null)
       } else if (sel.type === 'space') {
         editor.archiveSpace(sel.id)
+        refreshSpace(sel.id)
         editor.logChange('space.archive', `Space archived: ${sel.id}`)
         ui.addToast('Space archived', 'info')
         ui.select(null)
@@ -656,26 +660,33 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
 
   // ── Blast Radius ─────────────────────────────────────────────────────
   function showBlastRadius(deviceId: string) {
-    const affected: BlastInfo[] = []
     const links = [...editor.links.values()]
+
+    // Pass 1: collect all direct (hop-1) neighbors using a Set for O(1) lookup.
+    const hop1Map = new Map<string, string>() // neighborId → linkedDeviceId
     links.forEach(l => {
-      const isS = l.sourceDeviceId === deviceId
-      const isT = l.targetDeviceId === deviceId
-      if (!isS && !isT) return
-      const otherId = isS ? l.targetDeviceId : l.sourceDeviceId
-      if (!affected.find(a => a.deviceId === otherId)) {
-        affected.push({ deviceId: otherId, hop: 1, linkedDeviceId: deviceId })
-      }
-      links.forEach(l2 => {
-        const is2S = l2.sourceDeviceId === otherId
-        const is2T = l2.targetDeviceId === otherId
-        if (!is2S && !is2T) return
-        const hop2Id = is2S ? l2.targetDeviceId : l2.sourceDeviceId
-        if (hop2Id !== deviceId && !affected.find(a => a.deviceId === hop2Id)) {
-          affected.push({ deviceId: hop2Id, hop: 2, linkedDeviceId: otherId })
-        }
-      })
+      if (l.sourceDeviceId === deviceId) hop1Map.set(l.targetDeviceId, deviceId)
+      if (l.targetDeviceId === deviceId) hop1Map.set(l.sourceDeviceId, deviceId)
     })
+    hop1Map.delete(deviceId) // guard against self-loop links
+
+    // Pass 2: collect hop-2 neighbors (not already in hop-1, not the source).
+    const hop2Map = new Map<string, string>() // neighborId → linkedDeviceId
+    links.forEach(l => {
+      const hop1Id =
+        hop1Map.has(l.sourceDeviceId) ? l.sourceDeviceId :
+        hop1Map.has(l.targetDeviceId) ? l.targetDeviceId : null
+      if (!hop1Id) return
+      const hop2Id = hop1Id === l.sourceDeviceId ? l.targetDeviceId : l.sourceDeviceId
+      if (hop2Id !== deviceId && !hop1Map.has(hop2Id)) {
+        hop2Map.set(hop2Id, hop1Id)
+      }
+    })
+
+    const affected: BlastInfo[] = []
+    hop1Map.forEach((linkedId, id) => affected.push({ deviceId: id, hop: 1, linkedDeviceId: linkedId }))
+    hop2Map.forEach((linkedId, id) => affected.push({ deviceId: id, hop: 2, linkedDeviceId: linkedId }))
+
     blast.show(affected, id => device.getDeviceWorldPos(id))
     ui.blastSourceId = deviceId
   }
@@ -758,6 +769,19 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
     )
   }
 
+  function focusDevice(id: string) {
+    const pos = device.getDeviceWorldPos(id)
+    if (pos) camera.flyToDevice(pos)
+  }
+
+  function focusSpace(id: string) {
+    const sp = editor.spaces.get(id)
+    if (!sp?.position) return
+    const pos = new THREE.Vector3(sp.position.x, sp.position.y, sp.position.z)
+    const size = sp.size ?? { width: 8, height: 4, depth: 8 }
+    camera.flyToSpace(pos, size)
+  }
+
   function focusVirtualNode(id: string) {
     const pos = vnode.getNodeWorldPos(id)
     if (pos) camera.flyToDevice(pos)
@@ -833,7 +857,8 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
     configure, init, dispose,
     dropDeviceAt, confirmCreateLink,
     saveCurrentView, loadSavedView,
-    focusVirtualNode, onTimelineScrub, refreshSpace, rebuildAll,
+    focusDevice, focusSpace, focusVirtualNode,
+    onTimelineScrub, refreshSpace, rebuildAll,
     timeline,
     getScene: () => scene,
   }
