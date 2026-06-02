@@ -18,6 +18,9 @@ import { ChangeManager }        from '@/core/ChangeManager'
 import { TimelineManager }      from '@/core/TimelineManager'
 import { useEditorStore }       from '@/stores/editor'
 import { useUIStore }           from '@/stores/ui'
+import { syncCustomTypes }                        from '@/utils/colorUtils'
+import { syncCustomGeometries, preloadCustomModels } from '@/utils/geometryFactory'
+import { useDeviceTypesStore }                   from '@/stores/deviceTypes'
 import type { EdgeType, EditorOptions, SavedView } from '@/types'
 import type { BlastInfo }       from '@/renderers/BlastRadiusRenderer'
 
@@ -48,9 +51,10 @@ export function useNmsEditor() {
 }
 
 function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions: EditorOptions = {}) {
-  const scene   = new SceneManager()
-  const changes = new ChangeManager({})
-  const timeline = new TimelineManager()
+  const scene       = new SceneManager()
+  const changes     = new ChangeManager({})
+  const timeline    = new TimelineManager()
+  const deviceTypes = useDeviceTypesStore()
 
   let device:   DeviceRenderer
   let space:    SpaceRenderer
@@ -129,7 +133,8 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
     options.onReady?.()
   }
 
-  function _buildScene() {
+  async function _buildScene() {
+    await preloadCustomModels(deviceTypes.customTypes)
     space.loadSpaces([...editor.spaces.values()])
     device.loadInstanced([...editor.devices.values()], editor.mappings, id => editor.getMappingByDeviceId(id))
     link.loadLinks([...editor.links.values()], id => device.getDeviceWorldPos(id))
@@ -280,6 +285,16 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
     _watchStops.push(watch(
       () => `${ui.filter.search}|${ui.filter.status.join(',')}|${ui.filter.type.join(',')}`,
       () => applySearchFilter(),
+    ))
+
+    // Sync custom type registry to renderer modules whenever custom types change
+    _watchStops.push(watch(
+      () => deviceTypes.customTypes.size,
+      () => {
+        syncCustomTypes(deviceTypes.customTypes)
+        syncCustomGeometries(deviceTypes.customTypes)
+      },
+      { immediate: true },
     ))
   }
 
@@ -732,7 +747,7 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
       const dev = editor.devices.get(deviceId)
       const m   = editor.getMappingByDeviceId(deviceId)
       if (dev && m?.position) {
-        device.loadInstanced([dev], editor.mappings, id => editor.getMappingByDeviceId(id))
+        device.addDevice(dev, m)
         ui.select({ type: 'device', id: deviceId })
       }
     })
@@ -794,13 +809,16 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
     Object.entries(frame.states).forEach(([id, s]) => editor.updateDeviceStatus(id, s.status, s.metrics))
   }
 
-  function rebuildAll() {
+  async function rebuildAll() {
     space.dispose()
     space = new SpaceRenderer(scene.scene)
     space.loadSpaces([...editor.spaces.values()])
 
     device.dispose()
     device = new DeviceRenderer(scene.scene)
+
+    await preloadCustomModels(deviceTypes.customTypes)
+
     device.loadInstanced(
       [...editor.devices.values()],
       editor.mappings,

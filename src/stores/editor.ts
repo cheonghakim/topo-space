@@ -226,6 +226,13 @@ export const useEditorStore = defineStore('editor', () => {
     emitChange('annotation:update', { id: deviceId, type: 'device' })
   }
 
+  function setVisualType(deviceId: string, visualType: string | undefined) {
+    if (!requirePermission('annotation:update', { id: deviceId })) return
+    const m = getMappingByDeviceId(deviceId)
+    if (m) m.visualType = visualType
+    emitChange('annotation:update', { id: deviceId, type: 'device' })
+  }
+
   function addLink(link: NetworkLink) {
     if (!requirePermission('topology:createLink', { id: link.id })) return
     links.value.set(link.id, link)
@@ -522,7 +529,7 @@ export const useEditorStore = defineStore('editor', () => {
     loadMockData, replaceData, updateDeviceStatus, updateLinkStatus, upsertDevices, addManualDevice,
     importTopology,
     addSpace, updateSpace, archiveSpace,
-    mapDevice, unmapDevice, updateAnnotation,
+    mapDevice, unmapDevice, updateAnnotation, setVisualType,
     addLink, updateLink, removeLink,
     getMappingByDeviceId, getDevice,
     virtualNodes, savedViews, changeLog,

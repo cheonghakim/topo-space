@@ -1,15 +1,15 @@
 import * as THREE from 'three'
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
-import type { RawDevice, DeviceMapping, DeviceType, DeviceStatus } from '@/types'
-import { STATUS_COLOR_THREE, DEVICE_TYPE_COLOR } from '@/utils/colorUtils'
+import type { RawDevice, DeviceMapping, DeviceStatus } from '@/types'
+import { STATUS_COLOR_THREE, getTypeColor } from '@/utils/colorUtils'
 import { getDeviceGeometry, disposeGeometryCache } from '@/utils/geometryFactory'
 
-const _matCache = new Map<DeviceType, THREE.MeshStandardMaterial>()
+const _matCache = new Map<string, THREE.MeshStandardMaterial>()
 
-function getMaterial(type: DeviceType): THREE.MeshStandardMaterial {
+function getMaterial(type: string): THREE.MeshStandardMaterial {
   if (!_matCache.has(type)) {
     _matCache.set(type, new THREE.MeshStandardMaterial({
-      color: new THREE.Color(DEVICE_TYPE_COLOR[type]),
+      color: new THREE.Color(getTypeColor(type)),
       roughness: 0.35,
       metalness: 0.65,
       emissive: new THREE.Color(0x000000),
@@ -24,7 +24,7 @@ interface DeviceObject3D {
   label: CSS2DObject
   labelEl: HTMLDivElement
   deviceId: string
-  type: DeviceType
+  type: string
   status: DeviceStatus
 }
 
@@ -33,8 +33,8 @@ export class DeviceRenderer {
   private objects = new Map<string, DeviceObject3D>()
   private dummy   = new THREE.Object3D()
 
-  private instancedMeshes = new Map<DeviceType, THREE.InstancedMesh>()
-  private instanceIndex   = new Map<string, { type: DeviceType; idx: number }>()
+  private instancedMeshes = new Map<string, THREE.InstancedMesh>()
+  private instanceIndex   = new Map<string, { type: string; idx: number }>()
   private instanceColors  = new Map<string, THREE.Color>()
   private statusMap       = new Map<string, DeviceStatus>()
   private dimmedIds       = new Set<string>()
@@ -50,11 +50,11 @@ export class DeviceRenderer {
     mappings: Map<string, DeviceMapping>,
     getMappingByDeviceId: (id: string) => DeviceMapping | undefined,
   ) {
-    const byType = new Map<DeviceType, { device: RawDevice; mapping: DeviceMapping }[]>()
+    const byType = new Map<string, { device: RawDevice; mapping: DeviceMapping }[]>()
     devices.forEach(dev => {
       const m = getMappingByDeviceId(dev.id)
       if (!m || !m.position || m.mappingStatus === 'unmapped') return
-      const type = dev.normalizedType ?? 'unknown'
+      const type = m.visualType ?? dev.normalizedType ?? 'unknown'
       if (!byType.has(type)) byType.set(type, [])
       byType.get(type)!.push({ device: dev, mapping: m })
     })
@@ -89,6 +89,76 @@ export class DeviceRenderer {
       this.instancedMeshes.set(type, mesh)
       this.scene.add(mesh)
     })
+  }
+
+  addDevice(dev: RawDevice, mapping: DeviceMapping) {
+    if (!mapping.position || mapping.mappingStatus === 'unmapped') return
+    const type = mapping.visualType ?? dev.normalizedType ?? 'unknown'
+    const status = (dev.status ?? 'unknown') as DeviceStatus
+    const color  = STATUS_COLOR_THREE[status] ?? new THREE.Color(0x6b7280)
+
+    let mesh = this.instancedMeshes.get(type)
+
+    if (mesh && mesh.count < mesh.instanceMatrix.count) {
+      // Slot available in existing mesh — add in-place
+      const idx = mesh.count
+      this.dummy.position.set(mapping.position.x, mapping.position.y, mapping.position.z)
+      this.dummy.rotation.set(0, 0, 0)
+      this.dummy.scale.setScalar(1)
+      this.dummy.updateMatrix()
+      mesh.setMatrixAt(idx, this.dummy.matrix)
+      mesh.setColorAt(idx, color)
+      mesh.count = idx + 1
+      mesh.instanceMatrix.needsUpdate = true
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+      mesh.userData[`device_${idx}`] = dev.id
+      this.instanceIndex.set(dev.id, { type, idx })
+      this.instanceColors.set(dev.id, color.clone())
+      this.statusMap.set(dev.id, status)
+    } else {
+      // No mesh or no capacity — rebuild mesh for this type including new device
+      const existing: Array<{ id: string; pos: THREE.Vector3; status: DeviceStatus }> = []
+      if (mesh) {
+        for (let i = 0; i < mesh.count; i++) {
+          const id = mesh.userData[`device_${i}`] as string
+          if (!id) continue
+          const m4 = new THREE.Matrix4()
+          mesh.getMatrixAt(i, m4)
+          existing.push({ id, pos: new THREE.Vector3().setFromMatrixPosition(m4), status: this.statusMap.get(id) ?? 'unknown' as DeviceStatus })
+        }
+        this.scene.remove(mesh)
+        ;(mesh.material as THREE.Material).dispose()
+        this.instancedMeshes.delete(type)
+      }
+      existing.push({ id: dev.id, pos: new THREE.Vector3(mapping.position.x, mapping.position.y, mapping.position.z), status })
+
+      const geo  = getDeviceGeometry(type)
+      const mat  = getMaterial(type).clone()
+      mat.vertexColors = false
+      const newMesh = new THREE.InstancedMesh(geo, mat, existing.length + 50)
+      newMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      newMesh.count = existing.length
+      newMesh.userData.deviceType = type
+
+      existing.forEach(({ id, pos, status: s }, i) => {
+        this.dummy.position.copy(pos)
+        this.dummy.rotation.set(0, 0, 0)
+        this.dummy.scale.setScalar(1)
+        this.dummy.updateMatrix()
+        newMesh.setMatrixAt(i, this.dummy.matrix)
+        const c = STATUS_COLOR_THREE[s] ?? new THREE.Color(0x6b7280)
+        newMesh.setColorAt(i, c)
+        this.instanceIndex.set(id, { type, idx: i })
+        this.instanceColors.set(id, c.clone())
+        this.statusMap.set(id, s)
+        newMesh.userData[`device_${i}`] = id
+      })
+
+      newMesh.instanceMatrix.needsUpdate = true
+      if (newMesh.instanceColor) newMesh.instanceColor.needsUpdate = true
+      this.instancedMeshes.set(type, newMesh)
+      this.scene.add(newMesh)
+    }
   }
 
   updateStatus(deviceId: string, status: DeviceStatus) {
@@ -158,7 +228,7 @@ export class DeviceRenderer {
   }
 
   // deviceId by instanceId + type
-  getDeviceIdByInstance(type: DeviceType, instanceId: number): string | undefined {
+  getDeviceIdByInstance(type: string, instanceId: number): string | undefined {
     const mesh = this.instancedMeshes.get(type)
     return mesh?.userData[`device_${instanceId}`] as string | undefined
   }

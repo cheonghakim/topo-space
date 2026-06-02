@@ -133,7 +133,7 @@ export interface DeviceMapping {
   slotIndex?: number
   mappingStatus: 'unmapped' | 'auto_mapped' | 'mapped' | 'needs_review' | 'ignored' | 'orphaned'
   displayName?: string
-  visualType?: DeviceType
+  visualType?: string
   position?: Vector3Like
   rotation?: Vector3Like
   tags?: string[]
@@ -300,6 +300,22 @@ export interface VirtualNode {
   spaceId?:    string
   tags?:       string[]
   createdAt?:  string
+}
+
+// ─── Custom Device Types ─────────────────────────────────────────────────────
+
+export type CustomShape = 'box' | 'cylinder' | 'sphere' | 'octahedron'
+
+export interface CustomDeviceType {
+  id: string        // unique key, used as the type string in rendering
+  label: string     // display name e.g. "Core Router"
+  abbr: string      // ≤4 chars for badge e.g. "CR"
+  color: string     // hex color
+  shape: CustomShape
+  w: number         // width (or diameter for non-box)
+  h: number         // height
+  d: number         // depth (box only)
+  hasModel?: boolean // true when a GLTF/GLB model is stored in IndexedDB for this type
 }
 
 // ─── Saved View ──────────────────────────────────────────────────────────────

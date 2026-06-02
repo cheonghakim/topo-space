@@ -1,5 +1,7 @@
 import * as THREE from 'three'
-import type { DeviceType } from '@/types'
+import type { DeviceType, CustomDeviceType } from '@/types'
+import { loadModel } from '@/utils/modelStorage'
+import { loadGltfGeometry } from '@/utils/modelLoader'
 
 const DEVICE_SIZE: Record<DeviceType, [number, number, number]> = {
   server:        [0.80, 0.12, 0.50],
@@ -16,10 +18,45 @@ const DEVICE_SIZE: Record<DeviceType, [number, number, number]> = {
   unknown:       [0.60, 0.10, 0.40],
 }
 
-const _cache = new Map<DeviceType, THREE.BufferGeometry>()
+const _cache = new Map<string, THREE.BufferGeometry>()
 
-export function getDeviceGeometry(type: DeviceType): THREE.BufferGeometry {
+let _customGeoRegistry = new Map<string, CustomDeviceType>()
+
+export function syncCustomGeometries(types: Map<string, CustomDeviceType>) {
+  // Dispose and evict any previously cached custom geometries
+  _customGeoRegistry.forEach((_, id) => {
+    const geo = _cache.get(id)
+    if (geo) { geo.disposeBoundsTree?.(); geo.dispose(); _cache.delete(id) }
+  })
+  _customGeoRegistry = new Map(types)
+}
+
+export function getDeviceGeometry(type: string): THREE.BufferGeometry {
   if (_cache.has(type)) return _cache.get(type)!
+
+  // Custom type
+  const custom = _customGeoRegistry.get(type)
+  if (custom) {
+    if (custom.hasModel) {
+      // Model not yet loaded (preloadCustomModels hasn't run) — use box placeholder.
+      // The placeholder is cached so subsequent calls are cheap; rebuildAll() after
+      // preloadCustomModels overwrites this entry with the actual geometry.
+      const geo = new THREE.BoxGeometry(custom.w, custom.h, custom.d)
+      geo.computeBoundsTree()
+      _cache.set(type, geo)
+      return geo
+    }
+    let geo: THREE.BufferGeometry
+    switch (custom.shape) {
+      case 'cylinder':   geo = new THREE.CylinderGeometry(custom.w / 2, custom.w / 2, custom.h, 10); break
+      case 'sphere':     geo = new THREE.SphereGeometry(custom.w / 2, 10, 8); break
+      case 'octahedron': geo = new THREE.OctahedronGeometry(custom.w / 2); break
+      default:           geo = new THREE.BoxGeometry(custom.w, custom.h, custom.d)
+    }
+    geo.computeBoundsTree()
+    _cache.set(type, geo)
+    return geo
+  }
 
   let geo: THREE.BufferGeometry
   switch (type) {
@@ -39,8 +76,8 @@ export function getDeviceGeometry(type: DeviceType): THREE.BufferGeometry {
       geo = new THREE.SphereGeometry(0.30, 10, 8)
       break
     default: {
-      const [w, h, d] = DEVICE_SIZE[type]
-      geo = new THREE.BoxGeometry(w, h, d)
+      const size = (DEVICE_SIZE as Record<string, [number, number, number]>)[type] ?? [0.60, 0.10, 0.40]
+      geo = new THREE.BoxGeometry(size[0], size[1], size[2])
     }
   }
 
@@ -49,8 +86,31 @@ export function getDeviceGeometry(type: DeviceType): THREE.BufferGeometry {
   return geo
 }
 
-export function getDeviceHeight(type: DeviceType): number {
-  return DEVICE_SIZE[type][1]
+export function getDeviceHeight(type: string): number {
+  const custom = _customGeoRegistry.get(type)
+  if (custom) return custom.h
+  return (DEVICE_SIZE as Record<string, [number, number, number]>)[type]?.[1] ?? 0.1
+}
+
+export async function preloadCustomModels(types: Map<string, CustomDeviceType>): Promise<void> {
+  const pending: Promise<void>[] = []
+  types.forEach((type) => {
+    if (!type.hasModel) return
+    if (_cache.has(type.id)) return   // already loaded this session
+    pending.push((async () => {
+      try {
+        const data = await loadModel(type.id)
+        if (!data) return
+        const geo = await loadGltfGeometry(data)
+        if (!geo) return
+        geo.computeBoundsTree()
+        _cache.set(type.id, geo)      // overwrite any placeholder
+      } catch (e) {
+        console.warn(`[geometryFactory] Failed to preload model "${type.id}":`, e)
+      }
+    })())
+  })
+  if (pending.length) await Promise.all(pending)
 }
 
 export function disposeGeometryCache() {

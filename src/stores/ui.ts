@@ -39,6 +39,7 @@ export const useUIStore = defineStore('ui', () => {
   const showHelp          = ref(false)
   const showImport        = ref(false)
   const showAlertPanel    = ref(false)
+  const showCustomTypes   = ref(false)
 
   const fontScale = ref(loadFontScale())
   function loadFontScale(): number {
@@ -152,7 +153,7 @@ export const useUIStore = defineStore('ui', () => {
     contextMenu, showUnmapped, showSpaceTree, showLinkProp,
     showRackServerList, selectedRackForList,
     showSavedViews, showChangeLog, showTimeline, showMinimap,
-    showParticles, showBlastRadius, showVirtualNodes, showHelp, showImport, showAlertPanel,
+    showParticles, showBlastRadius, showVirtualNodes, showHelp, showImport, showAlertPanel, showCustomTypes,
     fontScale, setFontScale,
     timelineFrameIdx, timelineRecording, wsConnected, blastSourceId,
     tooltip,

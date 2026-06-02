@@ -68,6 +68,7 @@ const liveStatus = computed(() => ui.wsConnected);
 
 const PANELS: { label: string; key: keyof typeof ui }[] = [
   { label: "Alerts", key: "showAlertPanel" },
+  { label: "Custom Types", key: "showCustomTypes" },
   { label: "Devices", key: "showUnmapped" },
   { label: "Spaces", key: "showSpaceTree" },
   { label: "Saved Views", key: "showSavedViews" },

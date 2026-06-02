@@ -81,3 +81,30 @@ export const STATUS_LABEL: Record<DeviceStatus, string> = {
   acknowledged: 'Acknowledged',
   stale:        'Stale',
 }
+
+// ── Custom type registry (populated from useDeviceTypesStore) ─────────────────
+
+let _customColors = new Map<string, string>()
+let _customAbbrs  = new Map<string, string>()
+let _customLabels = new Map<string, string>()
+
+export function syncCustomTypes(types: Map<string, import('@/types').CustomDeviceType>) {
+  _customColors.clear(); _customAbbrs.clear(); _customLabels.clear()
+  types.forEach(t => {
+    _customColors.set(t.id, t.color)
+    _customAbbrs.set(t.id, t.abbr)
+    _customLabels.set(t.id, t.label)
+  })
+}
+
+export function getTypeColor(type: string): string {
+  return _customColors.get(type) ?? (DEVICE_TYPE_COLOR as Record<string, string>)[type] ?? '#6b7280'
+}
+
+export function getTypeAbbr(type: string): string {
+  return _customAbbrs.get(type) ?? (DEVICE_TYPE_ABBR as Record<string, string>)[type] ?? type.slice(0, 4).toUpperCase()
+}
+
+export function getTypeLabel(type: string): string {
+  return _customLabels.get(type) ?? (DEVICE_TYPE_LABEL as Record<string, string>)[type] ?? type
+}

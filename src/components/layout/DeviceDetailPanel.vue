@@ -61,6 +61,26 @@
       </section>
 
       <section class="section" v-if="ui.mode === 'edit'">
+        <div class="sec-title">Visual Shape</div>
+        <div class="vt-row">
+          <select v-model="visualType" class="vt-sel">
+            <option value="">Default ({{ device?.normalizedType ?? 'unknown' }})</option>
+            <optgroup label="Built-in">
+              <option v-for="t in allTypes.filter(x => !x.custom)" :key="t.id" :value="t.id">
+                {{ t.label }}
+              </option>
+            </optgroup>
+            <optgroup label="Custom" v-if="allTypes.some(x => x.custom)">
+              <option v-for="t in allTypes.filter(x => x.custom)" :key="t.id" :value="t.id">
+                ★ {{ t.label }}
+              </option>
+            </optgroup>
+          </select>
+          <button class="vt-apply" @click="applyVisualType">Apply</button>
+        </div>
+      </section>
+
+      <section class="section" v-if="ui.mode === 'edit'">
         <div class="sec-title">Annotation</div>
         <div class="anno-form">
           <label>Display name
@@ -95,15 +115,21 @@ import { computed, ref, watch } from 'vue'
 import { useEditorStore }  from '@/stores/editor'
 import { useUIStore }      from '@/stores/ui'
 import { DEVICE_TYPE_COLOR, DEVICE_TYPE_ABBR, STATUS_LABEL } from '@/utils/colorUtils'
+import { useDeviceTypeHelpers } from '@/composables/useDeviceTypeHelpers'
+import { useNmsEditor } from '@/composables/useNmsEditor'
 
 const editor = useEditorStore()
 const ui     = useUIStore()
+
+const { allTypes } = useDeviceTypeHelpers()
+const { rebuildAll } = useNmsEditor()
 
 const ifaceOpen  = ref(false)
 const actionLog  = ref('')
 const displayName = ref('')
 const memo       = ref('')
 const tagsStr    = ref('')
+const visualType = ref<string>('')
 
 const device  = computed(() => ui.selectedDeviceId ? editor.devices.get(ui.selectedDeviceId) ?? null : null)
 const mapping = computed(() => device.value ? editor.getMappingByDeviceId(device.value.id) ?? null : null)
@@ -115,7 +141,14 @@ watch(mapping, m => {
   displayName.value = m?.displayName ?? ''
   memo.value        = m?.memo ?? ''
   tagsStr.value     = m?.tags?.join(', ') ?? ''
+  visualType.value  = m?.visualType ?? ''
 }, { immediate: true })
+
+function applyVisualType() {
+  if (!device.value) return
+  editor.setVisualType(device.value.id, visualType.value || undefined)
+  rebuildAll()
+}
 
 const metrics = computed(() => {
   const m = device.value?.metrics
@@ -215,6 +248,11 @@ function ts() { return new Date().toLocaleTimeString() }
 .if-speed         { color: #475569; }
 .if-traffic       { color: #94a3b8; display: flex; gap: 6px; }
 .if-err           { color: #ef4444; }
+
+.vt-row  { display: flex; gap: 6px; align-items: center; }
+.vt-sel  { flex: 1; background: #0f172a; border: 1px solid #1e3a5a; color: #e2e8f0; padding: 4px 8px; border-radius: 5px; font-size: 11px; outline: none; }
+.vt-apply { background: #1e3a5f; border: 1px solid #2a4a8a; color: #93c5fd; padding: 4px 10px; border-radius: 5px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.vt-apply:hover { background: #2a4a8a; }
 
 .anno-form  { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: #64748b; }
 .anno-input {
