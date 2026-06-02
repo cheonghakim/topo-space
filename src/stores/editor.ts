@@ -104,7 +104,8 @@ export const useEditorStore = defineStore('editor', () => {
   // ── Actions ───────────────────────────────────────────────────────────────
   function loadMockData() {
     const data = generateMockData()
-    devices.value    = new Map(data.devices.map(d => [d.id, d]))
+    const allDevices = [...data.devices, ...data.unmappedDevices]
+    devices.value    = new Map(allDevices.map(d => [d.id, d]))
     spaces.value     = new Map(data.spaces.map(s => [s.id, s]))
     mappings.value   = new Map(data.deviceMappings.map(m => [m.id, m]))
     links.value      = new Map(data.links.map(l => [l.id, l]))
@@ -113,7 +114,8 @@ export const useEditorStore = defineStore('editor', () => {
   }
 
   function replaceData(data: EditorData) {
-    devices.value    = new Map((data.devices ?? []).map(d => [d.id, d]))
+    const allDevices = [...(data.devices ?? []), ...(data.unmappedDevices ?? [])]
+    devices.value    = new Map(allDevices.map(d => [d.id, d]))
     spaces.value     = new Map((data.spaces ?? []).map(s => [s.id, s]))
     mappings.value   = new Map((data.deviceMappings ?? []).map(m => [m.id, m]))
     links.value      = new Map((data.links ?? []).map(l => [l.id, l]))

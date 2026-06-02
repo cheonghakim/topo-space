@@ -92,7 +92,10 @@ const content: Record<"en" | "ko", Section[]> = {
           k: "Drag a space",
           v: "Moving a space carries its devices and links",
         },
+        { k: "Ctrl+Click", v: "Multi-select devices; Del to bulk-delete" },
         { k: "Del", v: "Delete selected device / link / space" },
+        { k: "Ctrl+Z", v: "Undo last edit" },
+        { k: "Ctrl+Y", v: "Redo" },
       ],
     },
     {
@@ -151,7 +154,10 @@ const content: Record<"en" | "ko", Section[]> = {
           v: "화살표로 장비/공간 이동 X(빨강)/Y(초록)/Z(파랑)",
         },
         { k: "Drag a space", v: "공간 이동 시 하위 장비와 링크가 함께 이동" },
+        { k: "Ctrl+Click", v: "장비 다중 선택 · Del로 일괄 삭제" },
         { k: "Del", v: "선택한 장비 / 링크 / 공간 삭제" },
+        { k: "Ctrl+Z", v: "마지막 편집 실행 취소" },
+        { k: "Ctrl+Y", v: "다시 실행" },
       ],
     },
     {

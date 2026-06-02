@@ -153,12 +153,17 @@ export class SpaceRenderer {
     if (obj) obj.badgeEl.textContent = text
   }
 
-  applyBadgeLod() {
+  applyBadgeLod(cameraDistance = 0) {
     this.objects.forEach((obj) => {
       const type = obj.hitMesh.userData.spaceType as Space['type']
       const source = obj.hitMesh.userData.spaceSource as Space['source'] | undefined
-      obj.badge.visible = this.shouldShowBadge(type, source)
+      obj.badge.visible = this.shouldShowBadge(type, source, cameraDistance)
     })
+  }
+
+  updateLod(camera: THREE.Camera, controlsTarget: THREE.Vector3) {
+    const dist = camera.position.distanceTo(controlsTarget)
+    this.applyBadgeLod(dist)
   }
 
   setPosition(spaceId: string, pos: THREE.Vector3) {
@@ -185,10 +190,13 @@ export class SpaceRenderer {
     return obj.group.position.clone()
   }
 
-  private shouldShowBadge(type: Space['type'], source?: Space['source']): boolean {
+  private shouldShowBadge(type: Space['type'], source?: Space['source'], cameraDistance = 0): boolean {
     const count = this.objects.size
     if (type === 'site') return true
     if (type === 'rack' && source === 'import') return false
+    // Distance-based LOD: hide detail labels when camera is far
+    if (cameraDistance > 120) return false
+    if (cameraDistance > 70) return type !== 'rack'
     if (count > 120) return false
     if (count > 60) return type !== 'rack'
     return type === 'rack' || type === 'zone' || type === 'cloud'

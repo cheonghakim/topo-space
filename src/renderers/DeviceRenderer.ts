@@ -93,6 +93,11 @@ export class DeviceRenderer {
 
   addDevice(dev: RawDevice, mapping: DeviceMapping) {
     if (!mapping.position || mapping.mappingStatus === 'unmapped') return
+    if (this.instanceIndex.has(dev.id)) {
+      // Already in scene — just update position in case it changed
+      this.setPosition(dev.id, new THREE.Vector3(mapping.position.x, mapping.position.y, mapping.position.z))
+      return
+    }
     const type = mapping.visualType ?? dev.normalizedType ?? 'unknown'
     const status = (dev.status ?? 'unknown') as DeviceStatus
     const color  = STATUS_COLOR_THREE[status] ?? new THREE.Color(0x6b7280)
@@ -198,6 +203,19 @@ export class DeviceRenderer {
     const color = on ? base.clone().multiplyScalar(2.4) : base.clone()
     mesh.setColorAt(ref.idx, color)
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  }
+
+  setMultiHighlight(deviceIds: string[]) {
+    const selectedSet = new Set(deviceIds)
+    this.instancedMeshes.forEach(mesh => {
+      for (let i = 0; i < mesh.count; i++) {
+        const id = mesh.userData[`device_${i}`] as string
+        if (!id) continue
+        const base = this.instanceColors.get(id) ?? new THREE.Color(0xffffff)
+        mesh.setColorAt(i, selectedSet.has(id) ? base.clone().multiplyScalar(3.0) : base.clone())
+      }
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    })
   }
 
   setSearchFocus(matchingIds: Set<string>, labelFor: (id: string) => string | undefined) {

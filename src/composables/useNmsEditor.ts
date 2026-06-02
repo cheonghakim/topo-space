@@ -14,7 +14,6 @@ import { DragMoveManager }      from '@/interaction/DragMoveManager'
 import { CameraController }     from '@/interaction/CameraController'
 import { ArrowGizmo }            from '@/interaction/ArrowGizmo'
 import type { GizmoAxis }        from '@/interaction/ArrowGizmo'
-import { ChangeManager }        from '@/core/ChangeManager'
 import { TimelineManager }      from '@/core/TimelineManager'
 import { useEditorStore }       from '@/stores/editor'
 import { useUIStore }           from '@/stores/ui'
@@ -52,7 +51,6 @@ export function useNmsEditor() {
 
 function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions: EditorOptions = {}) {
   const scene       = new SceneManager()
-  const changes     = new ChangeManager({})
   const timeline    = new TimelineManager()
   const deviceTypes = useDeviceTypesStore()
 
@@ -83,6 +81,53 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
   let _fpsWindowStart = 0
   let _fpsFrames = 0
   let _lastPerfWarning = 0
+
+  interface LayoutSnap {
+    mappings: [string, import('@/types').DeviceMapping][]
+    links:    [string, import('@/types').NetworkLink][]
+    spaces:   [string, import('@/types').Space][]
+    unmappedIds: string[]
+  }
+  const _undoStack: LayoutSnap[] = []
+  const _redoStack: LayoutSnap[] = []
+  const MAX_UNDO = 30
+
+  function _snapLayout(): LayoutSnap {
+    return {
+      mappings:   [...editor.mappings.entries()].map(([k, v]) => [k, { ...v }]),
+      links:      [...editor.links.entries()].map(([k, v]) => [k, { ...v }]),
+      spaces:     [...editor.spaces.entries()].map(([k, v]) => [k, { ...v }]),
+      unmappedIds: editor.unmappedDevices.map(d => d.id),
+    }
+  }
+
+  function _saveUndo() {
+    _undoStack.push(_snapLayout())
+    if (_undoStack.length > MAX_UNDO) _undoStack.shift()
+    _redoStack.length = 0
+  }
+
+  async function _restoreSnap(snap: LayoutSnap) {
+    editor.mappings.clear()
+    snap.mappings.forEach(([k, v]) => editor.mappings.set(k, v))
+    editor.links.clear()
+    snap.links.forEach(([k, v]) => editor.links.set(k, v))
+    editor.spaces.clear()
+    snap.spaces.forEach(([k, v]) => editor.spaces.set(k, v))
+    const snapIds = new Set(snap.unmappedIds)
+    const restored = snap.unmappedIds
+      .map(id => editor.devices.get(id))
+      .filter((d): d is NonNullable<typeof d> => d != null)
+    editor.unmappedDevices.splice(0, editor.unmappedDevices.length, ...restored)
+    // Re-add any device that was mapped at snapshot time but is now in unmapped
+    editor.devices.forEach(dev => {
+      if (snapIds.has(dev.id) && !restored.find(d => d.id === dev.id)) {
+        editor.unmappedDevices.push(dev)
+      }
+    })
+    await rebuildAll()
+    ui.select(null)
+  }
 
   function configure(nextOptions: EditorOptions = {}) {
     options = nextOptions
@@ -143,8 +188,13 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
   }
 
   function _syncParticles() {
+    const activeLinks = [...editor.links.values()].filter(l => {
+      const src = editor.devices.get(l.sourceDeviceId)
+      const tgt = editor.devices.get(l.targetDeviceId)
+      return src?.status !== 'offline' && tgt?.status !== 'offline'
+    })
     particle.syncLinks(
-      [...editor.links.values()],
+      activeLinks,
       id => link.getLinkPath(id),
       id => editor.devices.get(id)?.metrics?.networkOut ?? 100,
     )
@@ -163,6 +213,7 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
     _watchStops.push(watch(
       () => { let s = ''; editor.devices.forEach(d => { s += `${d.id}:${d.status};` }); return s },
       () => {
+        let particleDirty = false
         editor.devices.forEach(d => {
           const cur = d.status ?? 'unknown'
           const prev = _prevStatus.get(d.id)
@@ -179,9 +230,11 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
                 flash.flash(pos, 'recover')
               }
             }
+            if (cur === 'offline' || prev === 'offline') particleDirty = true
           }
           _prevStatus.set(d.id, cur)
         })
+        if (particleDirty) _syncParticles()
       },
     ))
 
@@ -287,6 +340,13 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
       () => applySearchFilter(),
     ))
 
+    // Re-apply search filter when devices are placed or unmapped so the 3D
+    // highlight state stays in sync with the current mapped device set.
+    _watchStops.push(watch(
+      () => editor.mappings.size,
+      () => applySearchFilter(),
+    ))
+
     // Sync custom type registry to renderer modules whenever custom types change
     _watchStops.push(watch(
       () => deviceTypes.customTypes.size,
@@ -368,6 +428,7 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
       vnode.update(elapsed)
       flash.update(delta)
       gizmo.update(scene.camera)
+      space.updateLod(scene.camera, scene.controls.target)
       if (ui.showParticles) particle.update(delta, ui.visibleLinkTypes)
 
       // warning/critical pulse
@@ -443,14 +504,18 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
 
     const hit = raycast.castClick(ui.linkToolActive)
 
-    if (ui.mode === 'edit' && ui.linkToolActive && hit.deviceId) {
-      linkDrag.onMouseDown(hit.deviceId, e)
-      _isDragCandidate = true
-      scene.controls.enabled = false
-      return
+    if (ui.mode === 'edit' && ui.linkToolActive) {
+      const startId = hit.deviceId ?? _nearestDeviceInScreen(e, _canvas, 28)
+      if (startId) {
+        linkDrag.onMouseDown(startId, e)
+        _isDragCandidate = true
+        scene.controls.enabled = false
+        return
+      }
     }
 
     if (ui.mode === 'edit' && hit.linkHandleId) {
+      _saveUndo()
       dragMove.onMouseDown(hit.linkHandleId, 'linkHandle', e)
       _isDragCandidate = true
       scene.controls.enabled = false
@@ -542,6 +607,7 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
     if (ui.mode === 'edit' && _gizmoAxis) {
       const t   = gizmo.currentTarget
       const pos = gizmo.position
+      _saveUndo()
       if (t?.type === 'device') {
         editor.mapDevice(
           t.id,
@@ -575,7 +641,12 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
     const hit = raycast.castClick(ui.linkToolActive)
 
     if (ui.mode === 'edit' && ui.linkToolActive && linkDrag.isDrawing) {
-      linkDrag.onMouseUp(hit.deviceId ?? null, e)
+      const targetId = hit.deviceId ?? _nearestDeviceInScreen(e, _canvas, 28)
+      const wasDragging = linkDrag.isDragging
+      const result = linkDrag.onMouseUp(targetId ?? null, e)
+      if (result === 'cancelled' && wasDragging) {
+        ui.addToast('Release on a device to create a link', 'info')
+      }
       _isDragCandidate = false
       return
     }
@@ -584,6 +655,8 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
       const result = dragMove.onMouseUp(e, _canvas, scene.camera)
       if (result) {
         const { targetId, targetType, newPos } = result
+        // linkHandle undo was saved on pointerdown; device/space save here (after drag)
+        if (targetType !== 'linkHandle') _saveUndo()
         if (targetType === 'device') {
           editor.mapDevice(
             targetId,
@@ -616,12 +689,31 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
     _isDragCandidate = false
 
     if (hit.deviceId) {
-      ui.select({ type: 'device', id: hit.deviceId })
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl+Click: toggle multi-select
+        if (ui.multiSelectedDeviceIds.has(hit.deviceId)) {
+          ui.multiSelectedDeviceIds.delete(hit.deviceId)
+        } else {
+          ui.multiSelectedDeviceIds.add(hit.deviceId)
+          if (ui.multiSelectedDeviceIds.size === 1) ui.select({ type: 'device', id: hit.deviceId })
+        }
+        device.setMultiHighlight([...ui.multiSelectedDeviceIds])
+      } else {
+        ui.multiSelectedDeviceIds.clear()
+        device.setMultiHighlight([])
+        ui.select({ type: 'device', id: hit.deviceId })
+      }
     } else if (hit.spaceId) {
+      ui.multiSelectedDeviceIds.clear()
+      device.setMultiHighlight([])
       ui.select({ type: 'space', id: hit.spaceId })
     } else if (hit.linkId) {
+      ui.multiSelectedDeviceIds.clear()
+      device.setMultiHighlight([])
       ui.select({ type: 'link', id: hit.linkId })
     } else if (!hit.linkHandleId) {
+      ui.multiSelectedDeviceIds.clear()
+      device.setMultiHighlight([])
       ui.select(null)
     }
   }
@@ -629,6 +721,7 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
   function onKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       ui.select(null); ui.hideContextMenu()
+      ui.multiSelectedDeviceIds.clear(); device?.setMultiHighlight([])
       linkDrag.cancel(); dragMove.cancel()
       scene.controls.enabled = true
       blast.clear(); ui.blastSourceId = null
@@ -642,8 +735,23 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
 
     if (ui.mode === 'edit' && (e.key === 'Delete' || e.key === 'Backspace') && !isInputFocused()) {
       e.preventDefault()
+      // Multi-select bulk delete
+      if (ui.multiSelectedDeviceIds.size > 1) {
+        _saveUndo()
+        const ids = [...ui.multiSelectedDeviceIds]
+        ids.forEach(id => {
+          editor.unmapDevice(id)
+        })
+        editor.logChange('device.unmap', `${ids.length} devices removed`)
+        ui.addToast(`${ids.length} devices removed`, 'info')
+        ui.multiSelectedDeviceIds.clear()
+        device.setMultiHighlight([])
+        ui.select(null)
+        return
+      }
       const sel = ui.selection
       if (!sel) return
+      _saveUndo()
       if (sel.type === 'device') {
         editor.unmapDevice(sel.id)
         editor.logChange('device.unmap', `Device removed: ${sel.id}`)
@@ -664,8 +772,54 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
       return
     }
 
-    if (e.ctrlKey && e.key === 'z') { changes.undo(); return }
-    if (e.ctrlKey && e.key === 'y') { changes.redo(); return }
+    if (e.ctrlKey && e.key === 'z' && !isInputFocused()) {
+      e.preventDefault()
+      const snap = _undoStack.pop()
+      if (snap) {
+        _redoStack.push(_snapLayout())
+        _restoreSnap(snap)
+        ui.addToast('Undone', 'info')
+      } else {
+        ui.addToast('Nothing to undo', 'info')
+      }
+      return
+    }
+    if (e.ctrlKey && e.key === 'y' && !isInputFocused()) {
+      e.preventDefault()
+      const snap = _redoStack.pop()
+      if (snap) {
+        _undoStack.push(_snapLayout())
+        _restoreSnap(snap)
+        ui.addToast('Redone', 'info')
+      } else {
+        ui.addToast('Nothing to redo', 'info')
+      }
+      return
+    }
+  }
+
+  function _nearestDeviceInScreen(e: PointerEvent, canvas: HTMLCanvasElement, radiusPx: number): string | null {
+    const rect = canvas.getBoundingClientRect()
+    const mx = e.clientX - rect.left
+    const my = e.clientY - rect.top
+    let bestId: string | null = null
+    let bestDist = radiusPx * radiusPx
+
+    editor.mappings.forEach(m => {
+      if (!m.position || m.mappingStatus === 'unmapped') return
+      const world = new THREE.Vector3(m.position.x, m.position.y, m.position.z)
+      world.project(scene.camera)
+      const sx = (world.x * 0.5 + 0.5) * rect.width
+      const sy = (-world.y * 0.5 + 0.5) * rect.height
+      const dx = sx - mx
+      const dy = sy - my
+      const d2 = dx * dx + dy * dy
+      if (d2 < bestDist) {
+        bestDist = d2
+        bestId = m.rawDeviceId
+      }
+    })
+    return bestId
   }
 
   function isInputFocused() {
@@ -740,6 +894,7 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
       dropPos = target.clone().setY(0)
     }
 
+    _saveUndo()
     editor.mapDevice(deviceId, '', 0, { x: dropPos.x, y: 0.4, z: dropPos.z })
     editor.logChange('device.map', `Device placed: ${deviceId}`)
     ui.addToast('Device placed', 'success')
@@ -749,6 +904,12 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
       if (dev && m?.position) {
         device.addDevice(dev, m)
         ui.select({ type: 'device', id: deviceId })
+        applySearchFilter()
+        // Fly camera to the newly placed device so the user can see it.
+        const worldPos = device.getDeviceWorldPos(deviceId)
+        if (worldPos) camera.flyToDevice(worldPos)
+      } else {
+        ui.addToast('Failed to place device — check Edit mode', 'warning')
       }
     })
   }
@@ -759,6 +920,7 @@ function createNmsEditorRuntime(editor: EditorStore, ui: UIStore, initialOptions
       useUIStore().hideContextMenu()
       return
     }
+    _saveUndo()
     const id = `link-${Date.now()}`
     editor.addLink({ id, sourceDeviceId: srcId, targetDeviceId: tgtId, type, source: 'manual', status: 'up' })
     editor.logChange('topology.link.create', `Link created: ${type}`)

@@ -9,6 +9,7 @@ export const useUIStore = defineStore('ui', () => {
 
   const selection  = ref<SelectionTarget | null>(null)
   const hoveredId  = ref<string | null>(null)
+  const multiSelectedDeviceIds = ref<Set<string>>(new Set())
 
   const linkToolActive    = ref(false)
   const linkSourceDeviceId = ref<string | null>(null)
@@ -38,7 +39,7 @@ export const useUIStore = defineStore('ui', () => {
   const showVirtualNodes  = ref(true)
   const showHelp          = ref(false)
   const showImport        = ref(false)
-  const showAlertPanel    = ref(false)
+  const showAlertPanel    = ref(true)
   const showCustomTypes   = ref(false)
 
   const fontScale = ref(loadFontScale())
@@ -147,7 +148,7 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   return {
-    mode, selection, hoveredId,
+    mode, selection, hoveredId, multiSelectedDeviceIds,
     linkToolActive, linkSourceDeviceId,
     visibleLinkTypes, filter,
     contextMenu, showUnmapped, showSpaceTree, showLinkProp,

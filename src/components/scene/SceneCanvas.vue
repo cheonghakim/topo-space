@@ -33,9 +33,9 @@
     </div>
 
     <div v-else-if="ui.mode === 'edit'" class="hint">
-      Click to select, then drag the
+      Click to select · <kbd>Ctrl</kbd>+Click multi-select · drag
       <span style="color:#ff6b7a">X</span>/<span style="color:#5fd968">Y</span>/<span style="color:#5fb0ff">Z</span>
-      arrows to move · select a link and drag its handle · <kbd>L</kbd> Connect · <kbd>Del</kbd> Delete · <kbd>F</kbd> Fit
+      arrows to move · <kbd>L</kbd> Connect · <kbd>Del</kbd> Delete · <kbd>Ctrl+Z</kbd> Undo · <kbd>F</kbd> Fit
     </div>
 
     <div v-else class="hint">

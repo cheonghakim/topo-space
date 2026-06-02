@@ -44,7 +44,7 @@ const ui     = useUIStore()
 const editor = useEditorStore()
 const fileInput = ref<HTMLInputElement | null>(null)
 
-const recording  = computed(() => props.timeline.isRecording)
+const recording  = ref(false)
 const frameCount = computed(() => props.timeline.frameCount)
 const currentFrame = computed(() => {
   if (ui.timelineFrameIdx < 0) return null
@@ -52,8 +52,9 @@ const currentFrame = computed(() => {
 })
 
 function toggleRecord() {
-  if (props.timeline.isRecording) {
+  if (recording.value) {
     props.timeline.stopRecording()
+    recording.value = false
     editor.logChange('timeline', 'Timeline recording stopped')
   } else {
     props.timeline.startRecording(() => {
@@ -61,6 +62,7 @@ function toggleRecord() {
       editor.devices.forEach(d => { state[d.id] = { status: d.status, metrics: { ...d.metrics } } })
       return state
     })
+    recording.value = true
     editor.logChange('timeline', 'Timeline recording started')
   }
 }
