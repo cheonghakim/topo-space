@@ -50,7 +50,7 @@ export interface RawDevice {
   hostname?: string
   ip?: string
   mac?: string
-  normalizedType?: DeviceType
+  normalizedType?: string
   vendor?: string
   model?: string
   os?: string

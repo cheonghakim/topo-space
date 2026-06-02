@@ -23,8 +23,8 @@
         @mouseleave="ui.hoveredId = null"
       >
         <span class="dot" :style="{ background: STATUS_COLOR_HEX[dev.status ?? 'unknown'] }" />
-        <span class="type-tag" :style="{ color: DEVICE_TYPE_COLOR[dev.normalizedType ?? 'unknown'], borderColor: DEVICE_TYPE_COLOR[dev.normalizedType ?? 'unknown'] }">
-          {{ DEVICE_TYPE_ABBR[dev.normalizedType ?? 'unknown'] }}
+        <span class="type-tag" :style="{ color: typeColor(dev.normalizedType), borderColor: typeColor(dev.normalizedType) }">
+          {{ typeAbbr(dev.normalizedType) }}
         </span>
         <div class="srv-info">
           <div class="srv-name">{{ dev.hostname ?? dev.id }}</div>
@@ -43,10 +43,12 @@
 import { computed } from 'vue'
 import { useEditorStore } from '@/stores/editor'
 import { useUIStore }     from '@/stores/ui'
-import { STATUS_COLOR_HEX, DEVICE_TYPE_COLOR, DEVICE_TYPE_ABBR } from '@/utils/colorUtils'
+import { STATUS_COLOR_HEX } from '@/utils/colorUtils'
+import { useDeviceTypeHelpers } from '@/composables/useDeviceTypeHelpers'
 
 const editor = useEditorStore()
 const ui     = useUIStore()
+const { typeColor, typeAbbr } = useDeviceTypeHelpers()
 
 const rack = computed(() => ui.selectedRackForList ? editor.spaces.get(ui.selectedRackForList) ?? null : null)
 

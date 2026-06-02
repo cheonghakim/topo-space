@@ -22,8 +22,8 @@
           C{{ (hovDev.metrics.cpu ?? 0).toFixed(0) }}%
           M{{ (hovDev.metrics.memory ?? 0).toFixed(0) }}%
         </div>
-        <div class="tt-type" :style="{ color: DEVICE_TYPE_COLOR[hovDev.normalizedType ?? 'unknown'] }">
-          {{ DEVICE_TYPE_LABEL[hovDev.normalizedType ?? 'unknown'] }}
+        <div class="tt-type" :style="{ color: typeColor(hovDev.normalizedType) }">
+          {{ typeLabel(hovDev.normalizedType) }}
         </div>
       </div>
     </Transition>
@@ -49,7 +49,8 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useNmsEditor }   from '@/composables/useNmsEditor'
 import { useEditorStore } from '@/stores/editor'
 import { useUIStore }     from '@/stores/ui'
-import { STATUS_COLOR_HEX, STATUS_LABEL, DEVICE_TYPE_COLOR, DEVICE_TYPE_LABEL } from '@/utils/colorUtils'
+import { STATUS_COLOR_HEX, STATUS_LABEL } from '@/utils/colorUtils'
+import { useDeviceTypeHelpers } from '@/composables/useDeviceTypeHelpers'
 
 const wrapper = ref<HTMLDivElement | null>(null)
 const canvas  = ref<HTMLCanvasElement | null>(null)
@@ -59,6 +60,7 @@ const editor = useEditorStore()
 const ui     = useUIStore()
 const emit   = defineEmits<{ (e: 'scene-ready'): void }>()
 const { init, dispose, dropDeviceAt } = useNmsEditor()
+const { typeColor, typeLabel } = useDeviceTypeHelpers()
 
 const tooltip = computed(() => ui.tooltip)
 const hovDev  = computed(() => ui.tooltip.deviceId ? editor.devices.get(ui.tooltip.deviceId) : null)

@@ -2,8 +2,8 @@
   <aside class="panel" v-if="device">
     <div class="panel-head">
       <div class="dev-title">
-        <span class="type-tag" :style="{ color: DEVICE_TYPE_COLOR[device.normalizedType ?? 'unknown'], borderColor: DEVICE_TYPE_COLOR[device.normalizedType ?? 'unknown'] }">
-          {{ DEVICE_TYPE_ABBR[device.normalizedType ?? 'unknown'] }}
+        <span class="type-tag" :style="{ color: typeColor(device.normalizedType), borderColor: typeColor(device.normalizedType) }">
+          {{ typeAbbr(device.normalizedType) }}
         </span>
         <div>
           <div class="dev-name">{{ mapping?.displayName ?? device.hostname }}</div>
@@ -114,14 +114,14 @@
 import { computed, ref, watch } from 'vue'
 import { useEditorStore }  from '@/stores/editor'
 import { useUIStore }      from '@/stores/ui'
-import { DEVICE_TYPE_COLOR, DEVICE_TYPE_ABBR, STATUS_LABEL } from '@/utils/colorUtils'
+import { STATUS_LABEL } from '@/utils/colorUtils'
 import { useDeviceTypeHelpers } from '@/composables/useDeviceTypeHelpers'
 import { useNmsEditor } from '@/composables/useNmsEditor'
 
 const editor = useEditorStore()
 const ui     = useUIStore()
 
-const { allTypes } = useDeviceTypeHelpers()
+const { allTypes, typeColor, typeAbbr } = useDeviceTypeHelpers()
 const { rebuildAll } = useNmsEditor()
 
 const ifaceOpen  = ref(false)

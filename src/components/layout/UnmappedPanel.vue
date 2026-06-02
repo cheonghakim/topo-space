@@ -12,7 +12,12 @@
         <input v-model="form.ip" class="add-input" placeholder="IP address" @keydown.enter="submitAdd" />
         <div class="add-row">
           <select v-model="form.type" class="add-sel">
-            <option v-for="t in TYPES" :key="t" :value="t">{{ DEVICE_TYPE_LABEL[t] }}</option>
+            <optgroup label="Built-in">
+              <option v-for="t in allTypes.filter(x => !x.custom)" :key="t.id" :value="t.id">{{ t.label }}</option>
+            </optgroup>
+            <optgroup v-if="allTypes.some(x => x.custom)" label="Custom">
+              <option v-for="t in allTypes.filter(x => x.custom)" :key="t.id" :value="t.id">★ {{ t.label }}</option>
+            </optgroup>
           </select>
           <input v-model="form.vendor" class="add-input" placeholder="Vendor" />
         </div>
@@ -34,8 +39,8 @@
         @dragend="onDragEnd"
         :class="{ dragging: draggingId === dev.id, readonly: ui.mode !== 'edit' }"
       >
-        <span class="type-tag" :style="{ color: DEVICE_TYPE_COLOR[dev.normalizedType ?? 'unknown'], borderColor: DEVICE_TYPE_COLOR[dev.normalizedType ?? 'unknown'] }">
-          {{ DEVICE_TYPE_ABBR[dev.normalizedType ?? 'unknown'] }}
+        <span class="type-tag" :style="{ color: typeColor(dev.normalizedType), borderColor: typeColor(dev.normalizedType) }">
+          {{ typeAbbr(dev.normalizedType) }}
         </span>
         <div class="dev-info">
           <div class="dev-name">{{ dev.hostname ?? dev.id }}</div>
@@ -54,22 +59,17 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import { useEditorStore } from '@/stores/editor'
-import { useUIStore }     from '@/stores/ui'
-import { DEVICE_TYPE_COLOR, DEVICE_TYPE_ABBR, DEVICE_TYPE_LABEL } from '@/utils/colorUtils'
-import type { DeviceType } from '@/types'
+import { useEditorStore }       from '@/stores/editor'
+import { useUIStore }           from '@/stores/ui'
+import { useDeviceTypeHelpers } from '@/composables/useDeviceTypeHelpers'
 
 const editor = useEditorStore()
 const ui     = useUIStore()
+const { allTypes, typeColor, typeAbbr } = useDeviceTypeHelpers()
 
 const draggingId = ref<string | null>(null)
-
-const TYPES: DeviceType[] = [
-  'server','switch','router','firewall','database','storage',
-  'vm','container','load_balancer','access_point','cloud_service','unknown',
-]
-const showAdd = ref(false)
-const form = reactive<{ hostname: string; ip: string; type: DeviceType; vendor: string }>({
+const showAdd    = ref(false)
+const form = reactive<{ hostname: string; ip: string; type: string; vendor: string }>({
   hostname: '', ip: '', type: 'server', vendor: '',
 })
 
