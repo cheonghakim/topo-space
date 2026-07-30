@@ -27,7 +27,7 @@ let rafId: number | null = null
 onMounted(() => {
   if (!canvas.value) return
   renderer = new MinimapRenderer(canvas.value)
-  renderer.updateBounds([...editor.spaces.values()])
+  renderer.updateBounds(editor.scopedSpaces(ui.activeRootSpaceId))
   startLoop()
 })
 
@@ -38,8 +38,8 @@ function startLoop() {
     const camPos = props.camera.position
     const tgt    = props.controls.target
     renderer.render(
-      [...editor.spaces.values()],
-      [...editor.devices.values()],
+      editor.scopedSpaces(ui.activeRootSpaceId),
+      editor.scopedDevices(ui.activeRootSpaceId),
       editor.mappings,
       { x: camPos.x, z: camPos.z },
       { x: tgt.x,    z: tgt.z },
@@ -49,8 +49,8 @@ function startLoop() {
   draw()
 }
 
-watch(() => editor.spaces.size, () => {
-  renderer?.updateBounds([...editor.spaces.values()])
+watch(() => [editor.spaces.size, ui.activeRootSpaceId] as const, () => {
+  renderer?.updateBounds(editor.scopedSpaces(ui.activeRootSpaceId))
 })
 
 onBeforeUnmount(() => { if (rafId) cancelAnimationFrame(rafId) })

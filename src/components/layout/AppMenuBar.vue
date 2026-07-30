@@ -43,6 +43,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { useUIStore } from "@/stores/ui";
 import { useEditorStore } from "@/stores/editor";
 import { useWebSocketSim } from "@/composables/useWebSocketSim";
+import { startProductTour } from "@/composables/useProductTour";
 import type { EdgeType } from "@/types";
 
 const ui = useUIStore();
@@ -69,6 +70,7 @@ const liveStatus = computed(() => ui.wsConnected);
 const PANELS: { label: string; key: keyof typeof ui }[] = [
   { label: "Alerts", key: "showAlertPanel" },
   { label: "Custom Types", key: "showCustomTypes" },
+  { label: "Background", key: "showBackgroundPanel" },
   { label: "Devices", key: "showUnmapped" },
   { label: "Spaces", key: "showSpaceTree" },
   { label: "Saved Views", key: "showSavedViews" },
@@ -158,6 +160,16 @@ const menus = computed<Menu[]>(() => [
   {
     label: "View",
     items: [
+      { header: true, label: "Navigation" },
+      {
+        label: "Campus overview (2D)",
+        checked: () => ui.viewMode === "2d",
+        action: () => {
+          if (ui.viewMode === "2d") ui.enterScope(ui.activeRootSpaceId);
+          else ui.showOverview();
+        },
+      },
+      { separator: true },
       { header: true, label: "Panels" },
       ...PANELS.map((p) => ({
         label: p.label,
@@ -235,6 +247,10 @@ const menus = computed<Menu[]>(() => [
         action: () => {
           ui.showHelp = true;
         },
+      },
+      {
+        label: "Take a tour",
+        action: () => startProductTour(),
       },
     ],
   },

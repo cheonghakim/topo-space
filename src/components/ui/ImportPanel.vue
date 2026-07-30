@@ -27,8 +27,10 @@
               <div class="schema">
                 Expected columns:
                 <code>hostname</code>, <code>ip</code>, <code>type</code>, <code>vendor</code>,
-                <code>site</code>, <code>zone</code>, <code>rack</code>, <code>status</code>, <code>uplink</code>.
-                <span class="req">hostname</span> and <span class="req">type</span> are required.
+                <code>building</code>, <code>floor</code> (or legacy <code>site</code>),
+                <code>zone</code>, <code>rack</code>, <code>status</code>, <code>uplink</code>.
+                <span class="req">hostname</span> and <span class="req">type</span> are required;
+                <code>building</code> is optional and only wraps floors when supplied.
               </div>
             </section>
 
@@ -49,7 +51,7 @@
                   <thead>
                     <tr>
                       <th>hostname</th><th>type</th><th>ip</th>
-                      <th>site</th><th>zone</th><th>rack</th>
+                      <th>building</th><th>floor</th><th>zone</th><th>rack</th>
                       <th>status</th><th>uplink</th>
                     </tr>
                   </thead>
@@ -58,7 +60,8 @@
                       <td>{{ r.hostname }}</td>
                       <td>{{ r.type }}</td>
                       <td>{{ r.ip ?? '' }}</td>
-                      <td>{{ r.site ?? '' }}</td>
+                      <td>{{ r.building ?? '' }}</td>
+                      <td>{{ r.floor ?? r.site ?? '' }}</td>
                       <td>{{ r.zone ?? '' }}</td>
                       <td>{{ r.rack ?? '' }}</td>
                       <td>{{ r.status ?? '' }}</td>

@@ -47,3 +47,19 @@ export async function loadGltfGeometry(data: ArrayBuffer): Promise<THREE.BufferG
     })
   })
 }
+
+// Unlike loadGltfGeometry (used for device-type icons), this keeps the full
+// scene graph — materials, textures, hierarchy — and applies no auto-fit
+// rescale, since background models need their real proportions with scale
+// left to the user. Used for background building/room models only.
+export async function loadGltfObject(data: ArrayBuffer): Promise<THREE.Object3D | null> {
+  const loader = new GLTFLoader()
+  return new Promise((resolve) => {
+    loader.parse(data, '', (gltf) => {
+      resolve(gltf.scene ?? null)
+    }, (err) => {
+      console.warn('[modelLoader] GLTF parse error:', err)
+      resolve(null)
+    })
+  })
+}

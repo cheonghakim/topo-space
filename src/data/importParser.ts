@@ -5,6 +5,11 @@ export interface ImportRow {
   ip?:      string
   type:     DeviceType
   vendor?:  string
+  // `building` is optional — it only wraps floors when a host actually has
+  // more than one building. `site` is the legacy column name for `floor`;
+  // when both are absent rows fall into a single default floor.
+  building?: string
+  floor?:   string
   site?:    string
   zone?:    string
   rack?:    string
@@ -53,6 +58,8 @@ const COL_MAP: Record<string, keyof ImportRow> = {
   ip: 'ip', ipaddress: 'ip', ipaddr: 'ip',
   type: 'type', devicetype: 'type', kind: 'type',
   vendor: 'vendor', manufacturer: 'vendor',
+  building: 'building',
+  floor: 'floor',
   site: 'site', location: 'site', datacenter: 'site', dc: 'site',
   zone: 'zone',
   rack: 'rack',

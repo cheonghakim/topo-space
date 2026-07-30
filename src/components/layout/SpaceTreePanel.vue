@@ -13,84 +13,18 @@
     </div>
 
     <div class="tree-body">
-      <div v-for="site in siteTree" :key="site.id" class="site-node">
-        <div class="tree-row site" @click="focusSpace(site)">
-          <span class="arrow" @click.stop="toggleOpen(site.id)">{{
-            openNodes.has(site.id) ? "▾" : "▸"
-          }}</span>
-          <span class="kind-tag">SITE</span>
-          <span class="node-name">{{ site.name }}</span>
-          <span class="node-badge" :class="siteStatus(site.id)">{{
-            siteStatusLabel(site.id)
-          }}</span>
-          <button v-if="ui.mode === 'edit'" class="row-btn" @click.stop="startEdit(site)" title="Rename">
-            Edit
-          </button>
-          <button
-            v-if="ui.mode === 'edit'"
-            class="row-btn del"
-            @click.stop="archiveSpace(site.id)"
-            title="Archive"
-          >
-            Del
-          </button>
-        </div>
-
-        <template v-if="openNodes.has(site.id)">
-          <div
-            v-for="zone in getChildren(site.id, 'zone')"
-            :key="zone.id"
-            class="zone-node"
-          >
-            <div class="tree-row zone" @click="focusSpace(zone)">
-              <span class="arrow" @click.stop="toggleOpen(zone.id)">{{
-                openNodes.has(zone.id) ? "▾" : "▸"
-              }}</span>
-              <span class="kind-tag">ZONE</span>
-              <span class="node-name">{{ zone.name }}</span>
-              <span class="dev-count">{{ getDeviceCount(zone.id) }}</span>
-              <button v-if="ui.mode === 'edit'" class="row-btn" @click.stop="startEdit(zone)">
-                Edit
-              </button>
-              <button v-if="ui.mode === 'edit'" class="row-btn del" @click.stop="archiveSpace(zone.id)">
-                Del
-              </button>
-            </div>
-
-            <template v-if="openNodes.has(zone.id)">
-              <div v-for="rack in getChildren(zone.id, 'rack')" :key="rack.id">
-                <div
-                  class="tree-row rack"
-                  @click="focusSpace(rack)"
-                  :class="{ 'has-issue': rackHasIssue(rack.id) }"
-                >
-                  <span class="arrow-spacer" />
-                  <span class="kind-tag">RACK</span>
-                  <span class="node-name">{{ rack.name }}</span>
-                  <span class="dev-count">{{ getDeviceCount(rack.id) }}</span>
-                  <button v-if="ui.mode === 'edit'" class="row-btn" @click.stop="startEdit(rack)">
-                    Edit
-                  </button>
-                  <button
-                    v-if="ui.mode === 'edit'"
-                    class="row-btn del"
-                    @click.stop="archiveSpace(rack.id)"
-                  >
-                    Del
-                  </button>
-                </div>
-              </div>
-              <div v-if="ui.mode === 'edit'" class="add-child-btn" @click="openAddChild(zone.id, 'rack')">
-                + Add rack
-              </div>
-            </template>
-          </div>
-
-          <div v-if="ui.mode === 'edit'" class="add-child-btn" @click="openAddChild(site.id, 'zone')">
-            + Add zone
-          </div>
-        </template>
-      </div>
+      <SpaceTreeNode
+        v-for="root in editor.rootSpaces"
+        :key="root.id"
+        :space="root"
+        :depth="0"
+        :open-nodes="openNodes"
+        @toggle="toggleOpen"
+        @focus="focusSpace"
+        @edit="startEdit"
+        @archive="archiveSpace"
+        @add-child="openAddChild"
+      />
 
       <div v-if="customGroups.length" class="site-node">
         <div class="tree-row site">
@@ -113,7 +47,7 @@
       </div>
 
       <div v-if="ui.mode === 'edit'" class="add-child-btn root" @click="showAdd = true">
-        + Add site / group
+        + Add building / site / group
       </div>
     </div>
 
@@ -121,6 +55,8 @@
       <div v-if="ui.mode === 'edit' && (showAdd || addChildParentId)" class="add-modal">
         <div class="add-title">Add Space</div>
         <select v-model="newType" class="add-sel">
+          <option value="building">Building</option>
+          <option value="floor">Floor</option>
           <option value="site">Site</option>
           <option value="zone">Zone</option>
           <option value="rack">Rack</option>
@@ -167,11 +103,12 @@ import { ref, computed } from "vue";
 import { useEditorStore } from "@/stores/editor";
 import { useUIStore } from "@/stores/ui";
 import { useNmsEditor } from "@/composables/useNmsEditor";
+import SpaceTreeNode from "@/components/layout/SpaceTreeNode.vue";
 import type { Space, SpaceType } from "@/types";
 
 const editor = useEditorStore();
 const ui = useUIStore();
-const { refreshSpace } = useNmsEditor();
+const { refreshSpace, focusSpace: switchToSpace } = useNmsEditor();
 
 const openNodes = ref(new Set<string>());
 const showAdd = ref(false);
@@ -182,9 +119,6 @@ const newName = ref("");
 const editingSpace = ref<Space | null>(null);
 const editName = ref("");
 
-const siteTree = computed(() =>
-  [...editor.spaces.values()].filter((s) => s.type === "site" && !s.archived),
-);
 const customGroups = computed(() =>
   [...editor.spaces.values()].filter(
     (s) =>
@@ -198,36 +132,6 @@ const customGroups = computed(() =>
   ),
 );
 
-function getChildren(parentId: string, type: SpaceType) {
-  return [...editor.spaces.values()].filter(
-    (s) => s.parentId === parentId && s.type === type && !s.archived,
-  );
-}
-
-function getDeviceCount(spaceId: string) {
-  return editor.devicesBySpace.get(spaceId)?.length ?? 0;
-}
-
-function rackHasIssue(rackId: string) {
-  return (editor.devicesBySpace.get(rackId) ?? []).some(
-    (d) => d.status === "critical" || d.status === "warning",
-  );
-}
-
-function siteStatus(siteId: string) {
-  const zones = getChildren(siteId, "zone");
-  const racks = zones.flatMap((z) => getChildren(z.id, "rack"));
-  const allDevs = racks.flatMap((r) => editor.devicesBySpace.get(r.id) ?? []);
-  if (allDevs.some((d) => d.status === "critical")) return "critical";
-  if (allDevs.some((d) => d.status === "warning")) return "warning";
-  return "normal";
-}
-
-function siteStatusLabel(siteId: string) {
-  const s = siteStatus(siteId);
-  return s === "critical" ? "CRIT" : s === "warning" ? "WARN" : "OK";
-}
-
 function toggleOpen(id: string) {
   if (openNodes.value.has(id)) openNodes.value.delete(id);
   else openNodes.value.add(id);
@@ -235,6 +139,7 @@ function toggleOpen(id: string) {
 
 function focusSpace(space: Space) {
   ui.select({ type: "space", id: space.id });
+  switchToSpace(space.id);
 }
 
 function openAddChild(parentId: string, type: SpaceType) {
@@ -258,7 +163,7 @@ function confirmAdd() {
   editor.addSpace({
     id,
     name: newName.value.trim(),
-    kind: ["site", "zone", "rack"].includes(newType.value)
+    kind: ["building", "floor", "site", "zone", "rack"].includes(newType.value)
       ? "physical"
       : "logical",
     type: newType.value,

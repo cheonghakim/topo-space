@@ -1,24 +1,35 @@
 import * as THREE from 'three'
+import { Line2 } from 'three/addons/lines/Line2.js'
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 import type { NetworkLink, EdgeType } from '@/types'
 import { LINK_STYLE } from '@/utils/colorUtils'
 
 const LINK_Y     = 0.45   // fallback height (preview / ground plane)
 const ENDPOINT_LIFT = 0.1 // raise the link slightly above the device top
+const DASH_FLOW_SPEED = 1.4 // world-units/sec the dash pattern travels along dashed links
 
 interface LinkObj {
   group:    THREE.Group
-  line:     THREE.Line
+  line:     Line2
   handle:   THREE.Mesh
   link:     NetworkLink
   path:     THREE.Vector3[]
   endpoints: { a: THREE.Vector3; b: THREE.Vector3 }
 }
 
+function flatten(path: THREE.Vector3[]): number[] {
+  const out: number[] = []
+  path.forEach(p => out.push(p.x, p.y, p.z))
+  return out
+}
+
 export class LinkRenderer {
   private scene: THREE.Scene
   private objects = new Map<string, LinkObj>()
-  private previewLine: THREE.Line | null = null
+  private previewLine: Line2 | null = null
   private _elapsed = 0
+  private _resolution = new THREE.Vector2(1, 1)
 
   constructor(scene: THREE.Scene) { this.scene = scene }
 
@@ -45,6 +56,14 @@ export class LinkRenderer {
     return ((a.y + b.y) / 2) + ENDPOINT_LIFT
   }
 
+  // Fat lines (Line2) need the renderer's pixel size to compute a real,
+  // configurable on-screen width — call this whenever the canvas resizes.
+  setResolution(width: number, height: number) {
+    this._resolution.set(width, height)
+    this.objects.forEach(o => (o.line.material as LineMaterial).resolution.set(width, height))
+    if (this.previewLine) (this.previewLine.material as LineMaterial).resolution.set(width, height)
+  }
+
   addLink(link: NetworkLink, getPos: (id: string) => THREE.Vector3 | null) {
     const aPos = getPos(link.sourceDeviceId)
     const bPos = getPos(link.targetDeviceId)
@@ -57,14 +76,21 @@ export class LinkRenderer {
     const path  = this.buildPath(aPos, bPos, midX, midZ)
 
     // Line
-    const geo = new THREE.BufferGeometry().setFromPoints(path)
-    const mat = new THREE.LineDashedMaterial({
-      color, transparent: true, opacity: style.opacity,
-      dashSize: style.dashed ? 0.35 : 1000,
-      gapSize:  style.dashed ? 0.15 : 0,
-      linewidth: 2,
+    const geo = new LineGeometry()
+    geo.setPositions(flatten(path))
+    const mat = new LineMaterial({
+      color: new THREE.Color(color).getHex(),
+      transparent: true,
+      opacity: style.opacity,
+      linewidth: link.type === 'physical' || link.type === 'security_path' ? 2.5 : 2,
+      dashed: style.dashed,
+      dashSize: 0.35,
+      gapSize: 0.22,
+      dashScale: 1,
+      resolution: this._resolution,
+      alphaToCoverage: true,
     })
-    const line = new THREE.Line(geo, mat)
+    const line = new Line2(geo, mat)
     line.computeLineDistances()
     line.userData.linkId = link.id
 
@@ -107,7 +133,7 @@ export class LinkRenderer {
     obj.link.midZ = newZ
     const newPath = this.buildPath(obj.endpoints.a, obj.endpoints.b, newX, newZ)
     obj.path = newPath
-    obj.line.geometry.setFromPoints(newPath)
+    obj.line.geometry.setPositions(flatten(newPath))
     obj.line.computeLineDistances()
     obj.handle.position.set(newX, this.midY(obj.endpoints.a, obj.endpoints.b), newZ)
   }
@@ -124,15 +150,7 @@ export class LinkRenderer {
       const newPath = this.buildPath(a, b, midX, midZ)
       obj.path = newPath
 
-      // Explicit buffer replacement to guarantee the GPU sees the new vertices.
-      const posArr = new Float32Array(newPath.length * 3)
-      for (let i = 0; i < newPath.length; i++) {
-        posArr[i * 3]     = newPath[i].x
-        posArr[i * 3 + 1] = newPath[i].y
-        posArr[i * 3 + 2] = newPath[i].z
-      }
-      obj.line.geometry.setAttribute('position', new THREE.BufferAttribute(posArr, 3))
-      obj.line.geometry.computeBoundingSphere()
+      obj.line.geometry.setPositions(flatten(newPath))
       obj.line.computeLineDistances()
 
       obj.handle.position.set(midX, this.midY(a, b), midZ)
@@ -144,17 +162,17 @@ export class LinkRenderer {
     if (!obj) return
     const style = LINK_STYLE[obj.link.type] ?? LINK_STYLE.manual
     const color = status === 'down' ? '#ef4444' : style.color
-    ;(obj.line.material as THREE.LineBasicMaterial).color.set(color)
+    ;(obj.line.material as LineMaterial).color.set(color)
   }
 
   setHighlight(id: string | null, prev: string | null) {
     if (prev) {
       const o = this.objects.get(prev)
-      if (o) (o.line.material as THREE.LineDashedMaterial).opacity = LINK_STYLE[o.link.type]?.opacity ?? 0.6
+      if (o) (o.line.material as LineMaterial).opacity = LINK_STYLE[o.link.type]?.opacity ?? 0.6
     }
     if (id) {
       const o = this.objects.get(id)
-      if (o) (o.line.material as THREE.LineDashedMaterial).opacity = 1.0
+      if (o) (o.line.material as LineMaterial).opacity = 1.0
     }
   }
 
@@ -179,15 +197,16 @@ export class LinkRenderer {
       new THREE.Vector3(to.x,   LINK_Y, to.z),
     ]
     if (!this.previewLine) {
-      const geo = new THREE.BufferGeometry().setFromPoints(pts)
-      const mat = new THREE.LineDashedMaterial({
-        color: 0x60a5fa, dashSize: 0.3, gapSize: 0.15,
-        transparent: true, opacity: 0.9, linewidth: 2,
+      const geo = new LineGeometry()
+      geo.setPositions(flatten(pts))
+      const mat = new LineMaterial({
+        color: 0x60a5fa, dashed: true, dashSize: 0.3, gapSize: 0.15, dashScale: 1,
+        transparent: true, opacity: 0.9, linewidth: 2.5, resolution: this._resolution,
       })
-      this.previewLine = new THREE.Line(geo, mat)
+      this.previewLine = new Line2(geo, mat)
       this.scene.add(this.previewLine)
     } else {
-      this.previewLine.geometry.setFromPoints(pts)
+      this.previewLine.geometry.setPositions(flatten(pts))
       this.previewLine.computeLineDistances()
     }
     this.previewLine.visible = true
@@ -200,11 +219,18 @@ export class LinkRenderer {
   update(delta: number) {
     this._elapsed += delta
     this.objects.forEach(({ line, link }) => {
+      const mat = line.material as LineMaterial
       if (link.status === 'down') {
-        const mat = line.material as THREE.LineDashedMaterial
         mat.opacity = 0.25 + 0.35 * Math.abs(Math.sin(this._elapsed * 2.5))
+      } else if (mat.dashed) {
+        // Marching-ants flow — only dashed link types (logical/service_dependency/
+        // manual/inferred) animate; solid types read "flow" via the particle stream.
+        mat.dashOffset -= DASH_FLOW_SPEED * delta
       }
     })
+    if (this.previewLine) {
+      (this.previewLine.material as LineMaterial).dashOffset -= DASH_FLOW_SPEED * delta
+    }
   }
 
   pickHandle(raycaster: THREE.Raycaster): string | null {
@@ -263,4 +289,3 @@ export class LinkRenderer {
     }
   }
 }
-

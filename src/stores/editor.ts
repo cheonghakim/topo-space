@@ -4,14 +4,14 @@ import { PermissionGuard } from '@/core/PermissionGuard'
 import type {
   RawDevice, Space, DeviceMapping, NetworkLink,
   NetworkInterface, DeviceStatus, DeviceMetrics,
-  VirtualNode, SavedView, EditorSnapshot,
+  VirtualNode, BackgroundObject, SavedView, EditorSnapshot,
   EditorAction, EditorData, EditorMode, FeatureFlags,
   PermissionContext, PermissionResolver,
 } from '@/types'
 import { generateMockData } from '@/utils/mockDataGenerator'
 
 export const useEditorStore = defineStore('editor', () => {
-  const guard = new PermissionGuard({ topologyEdit: true, layoutEdit: true, spaceEdit: true, annotationEdit: true, import: true })
+  const guard = new PermissionGuard({ topologyEdit: true, layoutEdit: true, spaceEdit: true, annotationEdit: true, import: true, backgroundEdit: true })
   let permissionDeniedHandler: ((ctx: PermissionContext) => void) | undefined
   let changeHandler: ((event: { type: string; target?: { id?: string; type?: string }; source: 'user' | 'api' | 'plugin' | 'system'; timestamp: number }) => void) | undefined
 
@@ -21,8 +21,9 @@ export const useEditorStore = defineStore('editor', () => {
   const links      = ref<Map<string, NetworkLink>>(new Map())
   const interfaces = ref<Map<string, NetworkInterface>>(new Map())
 
-  const unmappedDevices = ref<RawDevice[]>([])
-  const virtualNodes    = ref<Map<string, VirtualNode>>(new Map())
+  const unmappedDevices  = ref<RawDevice[]>([])
+  const virtualNodes     = ref<Map<string, VirtualNode>>(new Map())
+  const backgroundObjects = ref<Map<string, BackgroundObject>>(new Map())
   const savedViews      = ref<SavedView[]>([])
   const changeLog       = ref<{ id: string; type: string; msg: string; ts: string }[]>([])
 
@@ -101,6 +102,102 @@ export const useEditorStore = defineStore('editor', () => {
 
   const allSpacesList = computed(() => [...spaces.value.values()])
 
+  // A "root space" is any non-archived space with no parent — a legacy flat `site`,
+  // or a new top-level `building` once the caller adopts the building/floor hierarchy.
+  const rootSpaces = computed(() =>
+    [...spaces.value.values()].filter(s => !s.parentId && !s.archived))
+
+  function childSpaces(parentId: string): Space[] {
+    return [...spaces.value.values()].filter(s => s.parentId === parentId && !s.archived)
+  }
+
+  // All space ids under (and including) a root space, walked via parentId.
+  function descendantSpaceIds(rootId: string): Set<string> {
+    const ids = new Set<string>([rootId])
+    const queue = [rootId]
+    while (queue.length) {
+      const id = queue.shift()!
+      childSpaces(id).forEach(c => {
+        if (!ids.has(c.id)) { ids.add(c.id); queue.push(c.id) }
+      })
+    }
+    return ids
+  }
+
+  // Scoped views used to feed the 3D scene. `rootId: null` returns everything —
+  // this is what keeps datasets with no building/floor hierarchy behaving exactly
+  // as they always have.
+  function scopedSpaces(rootId: string | null): Space[] {
+    if (!rootId) return [...spaces.value.values()].filter(s => !s.archived)
+    const ids = descendantSpaceIds(rootId)
+    return [...spaces.value.values()].filter(s => ids.has(s.id) && !s.archived)
+  }
+
+  function scopedDeviceIds(rootId: string | null): Set<string> {
+    if (!rootId) return new Set(devices.value.keys())
+    const ids = new Set<string>()
+    descendantSpaceIds(rootId).forEach(sid => {
+      (devicesBySpace.value.get(sid) ?? []).forEach(d => ids.add(d.id))
+    })
+    return ids
+  }
+
+  function scopedDevices(rootId: string | null): RawDevice[] {
+    const ids = scopedDeviceIds(rootId)
+    return [...devices.value.values()].filter(d => ids.has(d.id))
+  }
+
+  function scopedLinks(rootId: string | null): NetworkLink[] {
+    if (!rootId) return [...links.value.values()]
+    const ids = scopedDeviceIds(rootId)
+    return [...links.value.values()].filter(l => ids.has(l.sourceDeviceId) && ids.has(l.targetDeviceId))
+  }
+
+  function scopedBackgroundObjects(rootId: string | null): BackgroundObject[] {
+    if (!rootId) return [...backgroundObjects.value.values()]
+    const ids = descendantSpaceIds(rootId)
+    return [...backgroundObjects.value.values()].filter(b => ids.has(b.spaceId))
+  }
+
+  // Spaces of these types are navigable scopes (a building's floors, a bare
+  // top-level site) rather than in-scene content — the 3D scene must never be
+  // scoped to one of these directly, since e.g. a building's floors reuse the
+  // same local coordinate space and would overlap if loaded together.
+  const CONTAINER_TYPES = new Set(['building', 'floor', 'site'])
+
+  // Given any space id (a rack, a zone, a floor, a building — anything),
+  // resolves the leaf floor/site scope that must be active in the 3D scene to
+  // see it: walk up to the nearest container ancestor (or itself), then
+  // descend through container children (e.g. a building) to its first floor.
+  function resolveLeafScope(spaceId: string): string | null {
+    let cur = spaces.value.get(spaceId)
+    while (cur && !CONTAINER_TYPES.has(cur.type)) {
+      cur = cur.parentId ? spaces.value.get(cur.parentId) : undefined
+    }
+    if (!cur) return null
+    let id = cur.id
+    for (;;) {
+      const containerChild = childSpaces(id).find(c => CONTAINER_TYPES.has(c.type))
+      if (!containerChild) return id
+      id = containerChild.id
+    }
+  }
+
+  // World-space bounding box of everything in scope, used to fly the camera
+  // to frame a floor's actual content instead of a fixed default distance.
+  function scopedBounds(rootId: string | null): { minX: number; maxX: number; minZ: number; maxZ: number } | null {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+    scopedSpaces(rootId).forEach(s => {
+      if (!s.position) return
+      const sz = s.size ?? { width: 10, depth: 10 }
+      minX = Math.min(minX, s.position.x - sz.width / 2)
+      maxX = Math.max(maxX, s.position.x + sz.width / 2)
+      minZ = Math.min(minZ, s.position.z - sz.depth / 2)
+      maxZ = Math.max(maxZ, s.position.z + sz.depth / 2)
+    })
+    return minX === Infinity ? null : { minX, maxX, minZ, maxZ }
+  }
+
   // ── Actions ───────────────────────────────────────────────────────────────
   function loadMockData() {
     const data = generateMockData()
@@ -122,6 +219,7 @@ export const useEditorStore = defineStore('editor', () => {
     interfaces.value = new Map((data.interfaces ?? []).map(i => [i.id, i]))
     unmappedDevices.value = [...(data.unmappedDevices ?? [])]
     virtualNodes.value = new Map((data.virtualNodes ?? []).map(n => [n.id, n]))
+    backgroundObjects.value = new Map((data.backgroundObjects ?? []).map(b => [b.id, b]))
   }
 
   function updateDeviceStatus(id: string, status: DeviceStatus, metrics?: Partial<DeviceMetrics>) {
@@ -281,6 +379,24 @@ export const useEditorStore = defineStore('editor', () => {
     emitChange('virtualNode:update', { id, type: 'virtualNode' })
   }
 
+  // ── Background Objects ───────────────────────────────────────────────────
+  function addBackgroundObject(obj: BackgroundObject) {
+    if (!requirePermission('background:create', { id: obj.id, spaceId: obj.spaceId })) return
+    backgroundObjects.value.set(obj.id, obj)
+    emitChange('background:create', { id: obj.id, type: 'background' })
+  }
+  function removeBackgroundObject(id: string) {
+    if (!requirePermission('background:delete', { id })) return
+    backgroundObjects.value.delete(id)
+    emitChange('background:delete', { id, type: 'background' })
+  }
+  function updateBackgroundObject(id: string, patch: Partial<BackgroundObject>) {
+    if (!requirePermission('background:update', { id })) return
+    const b = backgroundObjects.value.get(id)
+    if (b) Object.assign(b, patch)
+    emitChange('background:update', { id, type: 'background' })
+  }
+
   // ── Saved Views ──────────────────────────────────────────────────────────
   function addSavedView(view: SavedView) {
     savedViews.value.unshift(view)
@@ -300,21 +416,25 @@ export const useEditorStore = defineStore('editor', () => {
   // ── Import / Export ──────────────────────────────────────────────────────
   function importTopology(rows: {
     hostname: string; ip?: string; type: string; vendor?: string;
-    site?: string; zone?: string; rack?: string;
+    building?: string; floor?: string; site?: string; zone?: string; rack?: string;
     status?: string; uplink?: string;
   }[]): { devices: number; spaces: number; links: number } {
     if (!requirePermission('import')) return { devices: 0, spaces: 0, links: 0 }
-    // Group rows by site / zone / rack so we can assign coordinates deterministically.
-    type Group = Map<string, Map<string, Map<string, typeof rows>>>
+    // Group rows by floor / zone / rack so we can assign coordinates deterministically.
+    // `floor` is the new column; the legacy `site` column maps to it so existing
+    // CSVs keep working unchanged. `building` is optional and only wraps floors
+    // when a row actually specifies one.
+    type Group = Map<string, { building?: string; zones: Map<string, Map<string, typeof rows>> }>
     const tree: Group = new Map()
     rows.forEach(r => {
-      const s = r.site || 'Site'
+      const f = r.floor || r.site || 'Floor'
       const z = r.zone || 'Default'
       const k = r.rack || 'Rack'
-      if (!tree.has(s)) tree.set(s, new Map())
-      const zmap = tree.get(s)!
-      if (!zmap.has(z)) zmap.set(z, new Map())
-      const rmap = zmap.get(z)!
+      if (!tree.has(f)) tree.set(f, { building: r.building, zones: new Map() })
+      const entry = tree.get(f)!
+      if (!entry.building && r.building) entry.building = r.building
+      if (!entry.zones.has(z)) entry.zones.set(z, new Map())
+      const rmap = entry.zones.get(z)!
       if (!rmap.has(k)) rmap.set(k, [])
       rmap.get(k)!.push(r)
     })
@@ -326,7 +446,6 @@ export const useEditorStore = defineStore('editor', () => {
     const ZONE_PAD  = 4.0
     const ZONE_GAP  = 6.0
     const SITE_PAD  = 8.0
-    const SITE_GAP  = 14.0
 
     const createdSpaces: Space[] = []
     const createdDevices: RawDevice[] = []
@@ -334,11 +453,28 @@ export const useEditorStore = defineStore('editor', () => {
     const createdLinks: NetworkLink[] = []
     const deviceByHost = new Map<string, string>()
 
-    let siteCursor = 0
-    const sites = [...tree.entries()]
+    // Optional building wrapper — created on first use, reused across floors
+    // that share the same building name.
+    const buildingIdByName = new Map<string, string>()
+    function ensureBuilding(name: string): string {
+      const key = slug(name)
+      let id = buildingIdByName.get(key)
+      if (!id) {
+        id = `building-${key}`
+        const buildingSpace: Space = {
+          id, name, kind: 'physical', type: 'building', source: 'import',
+        }
+        spaces.value.set(id, buildingSpace)
+        createdSpaces.push(buildingSpace)
+        buildingIdByName.set(key, id)
+      }
+      return id
+    }
 
-    sites.forEach(([siteName, zoneMap], si) => {
-      const siteId = `site-${slug(siteName)}-${si}`
+    const floors = [...tree.entries()]
+
+    floors.forEach(([floorName, { building: buildingName, zones: zoneMap }], fi) => {
+      const floorId = `floor-${slug(floorName)}-${fi}`
       const zones = [...zoneMap.entries()]
 
       // First pass: rack sizes inside each zone (in local rack coordinates)
@@ -355,32 +491,34 @@ export const useEditorStore = defineStore('editor', () => {
         return { zoneName, racks, zoneW, zoneD }
       })
 
-      const siteW = zoneLayouts.reduce((a, z) => a + z.zoneW, 0) + Math.max(0, zoneLayouts.length - 1) * ZONE_GAP + SITE_PAD
-      const siteD = Math.max(...zoneLayouts.map(z => z.zoneD), 1) + SITE_PAD
+      const floorW = zoneLayouts.reduce((a, z) => a + z.zoneW, 0) + Math.max(0, zoneLayouts.length - 1) * ZONE_GAP + SITE_PAD
+      const floorD = Math.max(...zoneLayouts.map(z => z.zoneD), 1) + SITE_PAD
 
-      const siteX = siteCursor + siteW / 2
-      const siteZ = 0
-      siteCursor += siteW + SITE_GAP
+      // Local coordinates — only one floor is ever loaded into the 3D scene
+      // at a time, so every floor can start from the same origin.
+      const floorX = 0
+      const floorZ = 0
 
-      const site: Space = {
-        id: siteId, name: siteName, kind: 'physical', type: 'site',
+      const floor: Space = {
+        id: floorId, name: floorName, kind: 'physical', type: 'floor',
+        parentId: buildingName ? ensureBuilding(buildingName) : undefined,
         source: 'import',
-        position: { x: siteX, y: 0, z: siteZ },
-        size: { width: siteW, height: 0.1, depth: siteD },
+        position: { x: floorX, y: 0, z: floorZ },
+        size: { width: floorW, height: 0.1, depth: floorD },
       }
-      spaces.value.set(site.id, site)
-      createdSpaces.push(site)
+      spaces.value.set(floor.id, floor)
+      createdSpaces.push(floor)
 
-      let zoneCursor = siteX - siteW / 2 + SITE_PAD / 2
+      let zoneCursor = floorX - floorW / 2 + SITE_PAD / 2
       zoneLayouts.forEach(({ zoneName, racks, zoneW, zoneD }, zi) => {
-        const zoneId = `${siteId}-zone-${slug(zoneName)}-${zi}`
+        const zoneId = `${floorId}-zone-${slug(zoneName)}-${zi}`
         const zoneX  = zoneCursor + zoneW / 2
-        const zoneZ  = siteZ
+        const zoneZ  = floorZ
         zoneCursor  += zoneW + ZONE_GAP
 
         const zone: Space = {
           id: zoneId, name: zoneName, kind: 'physical', type: 'zone',
-          parentId: siteId, source: 'import',
+          parentId: floorId, source: 'import',
           position: { x: zoneX, y: 0, z: zoneZ },
           size: { width: zoneW, height: 0.1, depth: zoneD },
           color: pickZoneColor(zi),
@@ -435,7 +573,7 @@ export const useEditorStore = defineStore('editor', () => {
               slotIndex: slot,
               mappingStatus: 'mapped',
               position: { x: rackX + dx, y: 0.4, z: rackZ + dz },
-              tags: [r.type, siteName],
+              tags: [r.type, floorName],
               importance: dev.status === 'critical' ? 'critical' : 'normal',
               updatedAt: new Date().toISOString(),
             }
@@ -483,6 +621,7 @@ export const useEditorStore = defineStore('editor', () => {
       spaces: [...spaces.value.values()],
       deviceMappings: [...mappings.value.values()],
       manualLinks: [...links.value.values()].filter(l => l.source === 'manual'),
+      backgroundObjects: [...backgroundObjects.value.values()],
     }
   }
 
@@ -492,6 +631,7 @@ export const useEditorStore = defineStore('editor', () => {
     safeSnap.spaces.forEach(s => spaces.value.set(s.id, s))
     safeSnap.deviceMappings.forEach(m => mappings.value.set(m.id, m))
     safeSnap.manualLinks.forEach(l => links.value.set(l.id, l))
+    ;(safeSnap.backgroundObjects ?? []).forEach(b => backgroundObjects.value.set(b.id, b))
     unmappedDevices.value = unmappedDevices.value.filter(
       d => !safeSnap.deviceMappings.find(m => m.rawDeviceId === d.id && m.mappingStatus === 'mapped')
     )
@@ -527,6 +667,10 @@ export const useEditorStore = defineStore('editor', () => {
     devices, spaces, mappings, links, interfaces, unmappedDevices,
     mappedDeviceIds, criticalCount, warningCount,
     devicesBySpace, interfacesByDevice, rackSpaces, allSpacesList,
+    rootSpaces, childSpaces, descendantSpaceIds,
+    scopedSpaces, scopedDeviceIds, scopedDevices, scopedLinks, scopedBounds,
+    scopedBackgroundObjects,
+    resolveLeafScope,
     configureSecurity, setEditorMode, can,
     loadMockData, replaceData, updateDeviceStatus, updateLinkStatus, upsertDevices, addManualDevice,
     importTopology,
@@ -536,6 +680,8 @@ export const useEditorStore = defineStore('editor', () => {
     getMappingByDeviceId, getDevice,
     virtualNodes, savedViews, changeLog,
     addVirtualNode, removeVirtualNode, updateVirtualNode,
+    backgroundObjects,
+    addBackgroundObject, removeBackgroundObject, updateBackgroundObject,
     addSavedView, removeSavedView,
     logChange, exportSnapshot, importSnapshot,
   }

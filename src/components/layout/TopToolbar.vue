@@ -34,6 +34,15 @@
       Connect
     </button>
 
+    <button
+      :class="['btn', ui.showBackgroundPanel ? 'btn-on' : '']"
+      :disabled="ui.mode !== 'edit'"
+      @click="toggleBackgroundPanel"
+      title="Place a floor-plan image or building model"
+    >
+      Background
+    </button>
+
     <button :class="['btn', ui.showHelp ? 'btn-on' : '']" @click="ui.showHelp = !ui.showHelp">Help</button>
   </header>
 </template>
@@ -51,6 +60,22 @@ const statusFilter = computed({
   get: () => ui.filter.status[0] ?? '',
   set: (v) => ui.setFilter({ status: v ? [v as DeviceStatus] : [] }),
 })
+
+// Left-dock panels are mutually exclusive (App.vue renders the first truthy
+// one) — explicitly close the others so the button visibly does something
+// even when a higher-priority panel (Alerts, shown by default) is open.
+function toggleBackgroundPanel() {
+  if (ui.showBackgroundPanel) {
+    ui.showBackgroundPanel = false
+    return
+  }
+  ui.showAlertPanel = false
+  ui.showCustomTypes = false
+  ui.showRackServerList = false
+  ui.showSpaceTree = false
+  ui.showUnmapped = false
+  ui.showBackgroundPanel = true
+}
 </script>
 
 <style scoped>

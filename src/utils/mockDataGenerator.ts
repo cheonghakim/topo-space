@@ -102,35 +102,24 @@ export function generateMockData(): MockData {
   const links: NetworkLink[] = []
   const allInterfaces: NetworkInterface[] = []
 
-  // 3 Sites
-  const SITES = [
-    { id: 'site-seoul', name: 'Seoul DC', x: -60, z: 0 },
-    { id: 'site-busan', name: 'Busan DR', x:   0, z: 0 },
-    { id: 'site-cloud', name: 'Cloud (Tokyo)', x: 60, z: 0 },
-  ]
-
-  SITES.forEach((site, si) => {
-    spaces.push({
-      id: site.id, name: site.name,
-      kind: si < 2 ? 'physical' : 'virtual',
-      type: 'site', source: 'manual',
-      position: { x: site.x, y: 0, z: site.z },
-      size: { width: 50, height: 0.1, depth: 40 },
-    })
-
-    // 2 Zones per site
+  // Populates one floor's (or a flat site's) zones/racks/devices. Only one of
+  // these scopes is ever loaded into the 3D scene at a time, so every floor
+  // can reuse the same small local coordinate space around the origin instead
+  // of needing a globally unique offset.
+  function buildFloorContents(parentId: string, tag: string, rackLabelPrefix: string) {
     const ZONES = [
-      { suffix: '-zone-net', name: 'Network Zone', dx: -12, purpose: 'network' },
-      { suffix: '-zone-srv', name: 'Server Zone',  dx:  12, purpose: 'compute' },
+      { suffix: '-zone-net', name: 'Network Zone', dx: -12 },
+      { suffix: '-zone-srv', name: 'Server Zone',  dx:  12 },
     ]
+    const firstRackIdByZone: string[] = []
 
     ZONES.forEach((zone, zi) => {
-      const zoneId = site.id + zone.suffix
+      const zoneId = `${parentId}${zone.suffix}`
       spaces.push({
         id: zoneId, name: zone.name,
         kind: 'physical', type: 'zone',
-        parentId: site.id, source: 'manual',
-        position: { x: site.x + zone.dx, y: 0, z: site.z },
+        parentId, source: 'manual',
+        position: { x: zone.dx, y: 0, z: 0 },
         size: { width: 22, height: 0.1, depth: 38 },
         color: zi === 0 ? '#1e3a5f' : '#1a3a2a',
       })
@@ -140,8 +129,9 @@ export function generateMockData(): MockData {
       const ROW_GAP  = 2.2
       for (let ri = 0; ri < 3; ri++) {
         const rackId = `${zoneId}-rack-${ri}`
-        const rackX = site.x + zone.dx + (ri - 1) * 8
-        const rackZ = site.z
+        if (ri === 0) firstRackIdByZone[zi] = rackId
+        const rackX = zone.dx + (ri - 1) * 8
+        const rackZ = 0
 
         const typeCombo: DeviceType[] = zi === 0
           ? ['switch', 'router', 'firewall', 'load_balancer', 'switch']  // network zone
@@ -151,7 +141,7 @@ export function generateMockData(): MockData {
         const rows = Math.ceil(typeCombo.length / 2)
 
         spaces.push({
-          id: rackId, name: `Rack-${si + 1}${zi + 1}${ri + 1}`,
+          id: rackId, name: `Rack-${rackLabelPrefix}${zi + 1}${ri + 1}`,
           kind: 'physical', type: 'rack',
           parentId: zoneId, source: 'manual',
           position: { x: rackX, y: 0, z: rackZ },
@@ -159,7 +149,7 @@ export function generateMockData(): MockData {
         })
 
         typeCombo.forEach((type, slotIdx) => {
-          const { device, interfaces } = makeDevice(type, zoneId, site.id, slotIdx)
+          const { device, interfaces } = makeDevice(type, zoneId, tag, slotIdx)
           devices.push(device)
           allInterfaces.push(...interfaces)
 
@@ -178,7 +168,7 @@ export function generateMockData(): MockData {
             slotIndex: slotIdx,
             mappingStatus: 'mapped',
             position: { x: px, y: DEV_Y, z: pz },
-            tags: [type, site.id],
+            tags: [type, tag],
             importance: device.status === 'critical' ? 'critical' : 'normal',
             updatedAt: new Date().toISOString(),
           })
@@ -203,12 +193,9 @@ export function generateMockData(): MockData {
       }
     })
 
-    const netRacks = spaces.filter(s => s.type === 'rack' && s.parentId?.includes('zone-net') && s.parentId.startsWith(site.id))
-    const srvRacks = spaces.filter(s => s.type === 'rack' && s.parentId?.includes('zone-srv') && s.parentId.startsWith(site.id))
-
-    if (netRacks[0] && srvRacks[0]) {
-      const netSwitch = devices.find(d => d.normalizedType === 'switch' && deviceMappings.find(m => m.rawDeviceId === d.id && m.primarySpaceId === netRacks[0].id))
-      const srvSwitch = devices.find(d => d.normalizedType === 'switch' && deviceMappings.find(m => m.rawDeviceId === d.id && m.primarySpaceId === srvRacks[0].id))
+    if (firstRackIdByZone[0] && firstRackIdByZone[1]) {
+      const netSwitch = devices.find(d => d.normalizedType === 'switch' && deviceMappings.find(m => m.rawDeviceId === d.id && m.primarySpaceId === firstRackIdByZone[0]))
+      const srvSwitch = devices.find(d => d.normalizedType === 'switch' && deviceMappings.find(m => m.rawDeviceId === d.id && m.primarySpaceId === firstRackIdByZone[1]))
       if (netSwitch && srvSwitch) {
         links.push({
           id: `link-${uid()}`,
@@ -222,9 +209,45 @@ export function generateMockData(): MockData {
         })
       }
     }
+  }
+
+  // 2 buildings, 2 floors each — the sample the building/floor UI is built to showcase.
+  const BUILDINGS = [
+    { id: 'building-seoul', name: 'Seoul HQ', floors: 2 },
+    { id: 'building-busan', name: 'Busan DR', floors: 2 },
+  ]
+
+  BUILDINGS.forEach((building, bi) => {
+    spaces.push({
+      id: building.id, name: building.name,
+      kind: 'physical', type: 'building', source: 'manual',
+    })
+
+    for (let fi = 0; fi < building.floors; fi++) {
+      const floorId = `${building.id}-floor-${fi + 1}`
+      spaces.push({
+        id: floorId, name: `${fi + 1}F`,
+        kind: 'physical', type: 'floor',
+        parentId: building.id, source: 'manual',
+        position: { x: 0, y: 0, z: 0 },
+        size: { width: 50, height: 0.1, depth: 40 },
+      })
+      buildFloorContents(floorId, building.id, `${bi + 1}${fi + 1}`)
+    }
   })
 
-  const seoulRouter  = devices.find(d => d.normalizedType === 'router' && d.siteId === 'site-seoul')
+  // A flat, floor-less site — demonstrates that legacy site>zone>rack data
+  // (with no building/floor levels at all) keeps working unchanged: the 2D
+  // overview lists it directly as a root card, no drill-down needed.
+  spaces.push({
+    id: 'site-cloud', name: 'Cloud (Tokyo)',
+    kind: 'virtual', type: 'site', source: 'manual',
+    position: { x: 0, y: 0, z: 0 },
+    size: { width: 50, height: 0.1, depth: 40 },
+  })
+  buildFloorContents('site-cloud', 'site-cloud', '9')
+
+  const seoulRouter  = devices.find(d => d.normalizedType === 'router' && d.siteId === 'building-seoul')
   const cloudService = devices.find(d => d.normalizedType === 'router' && d.siteId === 'site-cloud')
   if (seoulRouter && cloudService) {
     links.push({
@@ -241,7 +264,7 @@ export function generateMockData(): MockData {
   const unmappedDevices: RawDevice[] = []
   const unmappedTypes: DeviceType[] = ['server', 'switch', 'firewall', 'server', 'database']
   unmappedTypes.forEach((type, i) => {
-    const { device } = makeDevice(type, 'unmapped', 'site-seoul', i)
+    const { device } = makeDevice(type, 'unmapped', 'building-seoul', i)
     device.syncState = 'active'
     unmappedDevices.push(device)
   })

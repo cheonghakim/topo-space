@@ -51,12 +51,13 @@ export class MinimapRenderer {
       if (s.type === 'rack') {
         ctx.fillStyle = '#1e3a5f'
         ctx.fillRect(p.x - 3, p.y - 2, 6, 4)
-      } else if (s.type === 'zone' || s.type === 'site') {
+      } else if (s.type === 'zone' || s.type === 'site' || s.type === 'floor' || s.type === 'building') {
+        const isRoot = s.type === 'site' || s.type === 'floor' || s.type === 'building'
         const sz = s.size ?? { width: 20, depth: 20 }
         const w  = (sz.width / (this.bounds.maxX - this.bounds.minX)) * (W - 16)
         const h  = (sz.depth / (this.bounds.maxZ - this.bounds.minZ)) * (H - 16)
-        ctx.strokeStyle = s.type === 'site' ? '#2a4a8a' : '#1e3a5f'
-        ctx.lineWidth = s.type === 'site' ? 1.5 : 1
+        ctx.strokeStyle = isRoot ? '#2a4a8a' : '#1e3a5f'
+        ctx.lineWidth = isRoot ? 1.5 : 1
         ctx.setLineDash(s.type === 'zone' ? [2, 2] : [])
         ctx.strokeRect(p.x - w / 2, p.y - h / 2, w, h)
         ctx.setLineDash([])

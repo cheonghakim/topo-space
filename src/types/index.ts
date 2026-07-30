@@ -12,7 +12,7 @@ export type DeviceType =
   | 'load_balancer' | 'access_point' | 'cloud_service' | 'unknown'
 
 export type SpaceType =
-  | 'site' | 'zone' | 'rack' | 'custom_group'
+  | 'building' | 'floor' | 'site' | 'zone' | 'rack' | 'custom_group'
   | 'security_zone' | 'service' | 'external' | 'cloud'
 
 export type EdgeType =
@@ -29,6 +29,7 @@ export type EditorAction =
   | 'annotation:create' | 'annotation:update' | 'annotation:delete'
   | 'topology:createLink' | 'topology:updateLink' | 'topology:deleteLink'
   | 'virtualNode:create' | 'virtualNode:update' | 'virtualNode:delete'
+  | 'background:create' | 'background:update' | 'background:delete'
   | 'import'
   | 'rawDevice:update'
 
@@ -179,6 +180,7 @@ export interface EditorSnapshot {
   spaces: Space[]
   deviceMappings: DeviceMapping[]
   manualLinks: NetworkLink[]
+  backgroundObjects: BackgroundObject[]
 }
 
 // ─── Feature Flags ──────────────────────────────────────────────────────────
@@ -196,6 +198,8 @@ export interface FeatureFlags {
   spaceEdit?: boolean
   annotationEdit?: boolean
   import?: boolean
+  tour?: boolean
+  backgroundEdit?: boolean
 }
 
 export const DEFAULT_FEATURES: Required<FeatureFlags> = {
@@ -211,6 +215,8 @@ export const DEFAULT_FEATURES: Required<FeatureFlags> = {
   spaceEdit: false,
   annotationEdit: false,
   import: false,
+  tour: true,
+  backgroundEdit: true,
 }
 
 // ─── Permission ──────────────────────────────────────────────────────────────
@@ -241,6 +247,7 @@ export interface EditorData {
   interfaces?: NetworkInterface[]
   unmappedDevices?: RawDevice[]
   virtualNodes?: VirtualNode[]
+  backgroundObjects?: BackgroundObject[]
 }
 
 export interface EditorOptions {
@@ -250,6 +257,8 @@ export interface EditorOptions {
   permissionResolver?: PermissionResolver
   mode?: EditorMode
   mockData?: boolean
+  // Root space (building/site) or floor to land on instead of the 2D campus overview.
+  initialFloorId?: string
   onReady?: () => void
   onChange?: (event: EditorEventPayload) => void
   onSave?: (snapshot: EditorSnapshot) => void | Promise<void>
@@ -265,7 +274,7 @@ export interface EditorOptions {
 // ─── Selection ───────────────────────────────────────────────────────────────
 
 export interface SelectionTarget {
-  type: 'device' | 'space' | 'link'
+  type: 'device' | 'space' | 'link' | 'background'
   id: string
 }
 
@@ -300,6 +309,26 @@ export interface VirtualNode {
   spaceId?:    string
   tags?:       string[]
   createdAt?:  string
+}
+
+// ─── Background Objects ─────────────────────────────────────────────────────
+// User-placed reference geometry (floor-plan images, building/room models) —
+// a per-floor tracing guide for laying out devices/spaces. Only movable while
+// `ui.backgroundEditActive` is on; otherwise translucent and click-through.
+
+export interface BackgroundObject {
+  id:         string
+  name:       string
+  kind:       'image' | 'model'
+  spaceId:    string       // which floor/space this belongs to
+  assetId:    string       // key into backgroundStorage's IndexedDB store
+  position:   Vector3Like
+  rotationY?: number       // degrees — flat-on-ground objects only need yaw
+  scale?:     number       // uniform scale factor (models)
+  width?:     number       // image only — real-world plane width
+  depth?:     number       // image only — real-world plane depth
+  opacity?:   number       // "dashboard view" opacity, default 0.3
+  createdAt?: string
 }
 
 // ─── Custom Device Types ─────────────────────────────────────────────────────

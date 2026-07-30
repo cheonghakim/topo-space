@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 
-export type GizmoTarget = { type: 'device' | 'space' | 'virtualNode'; id: string }
+export type GizmoTarget = { type: 'device' | 'space' | 'virtualNode' | 'background'; id: string }
 export type GizmoAxis   = 'x' | 'y' | 'z' | 'xz'
 
 /**

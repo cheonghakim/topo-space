@@ -8,19 +8,27 @@
       <aside class="left-dock" v-if="hasLeftPanel">
         <AlertPanel          v-if="ui.showAlertPanel" />
         <CustomTypePanel     v-else-if="ui.showCustomTypes" />
+        <BackgroundPanel     v-else-if="ui.showBackgroundPanel" />
         <RackServerListPanel v-else-if="ui.showRackServerList" />
         <SpaceTreePanel      v-else-if="ui.showSpaceTree" />
         <UnmappedPanel       v-else-if="ui.showUnmapped" />
       </aside>
 
       <div class="canvas-wrap" ref="canvasWrap">
+        <OverviewCanvas
+          v-if="ui.viewMode === '2d'"
+          @enter-floor="onEnterFloor"
+        />
         <SceneCanvas
+          v-else
           ref="sceneRef"
           @scene-ready="onSceneReady"
         />
 
+        <ViewSwitcher v-if="ui.viewMode === '3d'" />
+
         <MinimapPanel
-          v-if="sceneReady && ui.showMinimap"
+          v-if="ui.viewMode === '3d' && sceneReady && ui.showMinimap"
           :camera="currentCamera"
           :controls="currentControls"
         />
@@ -61,6 +69,10 @@
       <div v-if="ui.blastSourceId" class="blast-banner">
         Impact radius
         <span class="blast-id">{{ blastDeviceName }}</span>
+        <span class="blast-legend">
+          <span class="blast-legend-item"><span class="blast-dot blast-dot--hop1" />1 hop</span>
+          <span class="blast-legend-item"><span class="blast-dot blast-dot--hop2" />2 hop</span>
+        </span>
         <button class="blast-close" @click="ui.blastSourceId = null; ui.select(null)">Close</button>
       </div>
     </Transition>
@@ -73,6 +85,7 @@ import AppMenuBar          from '@/components/layout/AppMenuBar.vue'
 import TopToolbar          from '@/components/layout/TopToolbar.vue'
 import AlertPanel          from '@/components/layout/AlertPanel.vue'
 import CustomTypePanel     from '@/components/layout/CustomTypePanel.vue'
+import BackgroundPanel     from '@/components/layout/BackgroundPanel.vue'
 import RackServerListPanel from '@/components/layout/RackServerListPanel.vue'
 import SpaceTreePanel    from '@/components/layout/SpaceTreePanel.vue'
 import UnmappedPanel     from '@/components/layout/UnmappedPanel.vue'
@@ -85,10 +98,12 @@ import VirtualNodePanel  from '@/components/layout/VirtualNodePanel.vue'
 import TimelinePanel     from '@/components/layout/TimelinePanel.vue'
 import MinimapPanel      from '@/components/layout/MinimapPanel.vue'
 import SceneCanvas       from '@/components/scene/SceneCanvas.vue'
+import OverviewCanvas    from '@/components/scene/OverviewCanvas.vue'
 import ContextMenu       from '@/components/ui/ContextMenu.vue'
 import ToastPanel        from '@/components/ui/ToastPanel.vue'
 import HelpPanel         from '@/components/ui/HelpPanel.vue'
 import ImportPanel       from '@/components/ui/ImportPanel.vue'
+import ViewSwitcher      from '@/components/ui/ViewSwitcher.vue'
 import { useUIStore }    from '@/stores/ui'
 import { useEditorStore } from '@/stores/editor'
 import { useNmsEditor } from '@/composables/useNmsEditor'
@@ -112,6 +127,8 @@ function onSceneReady() {
   sceneReady.value = true
 }
 
+function onEnterFloor(id: string) { ui.enterScope(id) }
+
 function onSaveView(name: string) { saveCurrentView(name) }
 function onLoadView(view: SavedView) { loadSavedView(view) }
 function onSelectVNode(id: string) { focusVirtualNode(id) }
@@ -122,7 +139,7 @@ const blastDeviceName = computed(() => {
 })
 
 const hasLeftPanel = computed(() =>
-  ui.showAlertPanel || ui.showCustomTypes || ui.showRackServerList || ui.showSpaceTree || ui.showUnmapped)
+  ui.showAlertPanel || ui.showCustomTypes || ui.showBackgroundPanel || ui.showRackServerList || ui.showSpaceTree || ui.showUnmapped)
 
 const hasRightPanel = computed(() =>
   !!ui.selectedDeviceId || !!ui.selectedLinkId || !!ui.selectedSpaceId ||
@@ -193,4 +210,10 @@ watch(() => ui.fontScale, (v) => {
 }
 .blast-id    { color: #f87171; font-family: monospace; }
 .blast-close { background: none; border: none; color: #f87171; cursor: pointer; }
+
+.blast-legend      { display: flex; align-items: center; gap: 10px; padding-left: 4px; border-left: 1px solid #7f1d1d; }
+.blast-legend-item { display: flex; align-items: center; gap: 4px; color: #cbd5e1; }
+.blast-dot         { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.blast-dot--hop1   { background: #ff6b00; }
+.blast-dot--hop2   { background: #ffdd00; }
 </style>

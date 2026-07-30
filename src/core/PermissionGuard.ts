@@ -22,6 +22,7 @@ export class PermissionGuard {
     if (action.startsWith('space:') && !this.features.spaceEdit) return false
     if (action.startsWith('annotation:') && !this.features.annotationEdit) return false
     if (action.startsWith('topology:') && !this.features.topologyEdit) return false
+    if (action.startsWith('background:') && !this.features.backgroundEdit) return false
     if (action === 'device:map' && !this.features.layoutEdit) return false
 
     if (this.mode === 'view') {
@@ -30,6 +31,7 @@ export class PermissionGuard {
         'device:map','device:unmap','annotation:create','annotation:update','annotation:delete',
         'topology:createLink','topology:updateLink','topology:deleteLink',
         'virtualNode:create','virtualNode:update','virtualNode:delete',
+        'background:create','background:update','background:delete',
         'import',
       ]
       if (editActions.includes(action)) return false

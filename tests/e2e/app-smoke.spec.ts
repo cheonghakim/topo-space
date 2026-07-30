@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test'
 
+// The product tour auto-starts once per fresh browser profile (tracked via
+// localStorage) and blocks the rest of the page until dismissed — seed the
+// "already seen" flag before each test so it doesn't interfere with these
+// editor-focused smoke tests.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('topospace.tourSeen', '1'))
+})
+
 test('renders the editor shell and keeps edit-only controls out of view mode', async ({ page }) => {
   await page.goto('/')
 

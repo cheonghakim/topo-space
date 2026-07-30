@@ -14,6 +14,7 @@ export class SceneManager {
   private _overlayEl!: HTMLElement
   private _onError?: (error: Error, context?: Record<string, unknown>) => void
   private _resizeObserver?: ResizeObserver
+  private _resizeListeners: Array<(width: number, height: number) => void> = []
 
   init(
     canvas: HTMLCanvasElement,
@@ -99,6 +100,21 @@ export class SceneManager {
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(w, h)
     this.css2dRenderer.setSize(w, h)
+    this._resizeListeners.forEach(cb => cb(w, h))
+  }
+
+  getSize(): { width: number; height: number } {
+    return {
+      width:  this._wrapper?.clientWidth  || window.innerWidth,
+      height: this._wrapper?.clientHeight || window.innerHeight,
+    }
+  }
+
+  // Fat lines (Line2/LineMaterial) need the renderer's pixel size to compute
+  // a real, configurable line width — this lets renderers that use them
+  // (LinkRenderer) stay in sync without SceneManager knowing about them.
+  onResize(cb: (width: number, height: number) => void) {
+    this._resizeListeners.push(cb)
   }
 
   private onWebglContextLost = (event: Event) => {

@@ -41,6 +41,18 @@ export const useUIStore = defineStore('ui', () => {
   const showImport        = ref(false)
   const showAlertPanel    = ref(true)
   const showCustomTypes   = ref(false)
+  const showBackgroundPanel = ref(false)
+  // Background objects (floor-plan images/building models) are only
+  // draggable/clickable while this is on — mirrors linkToolActive's
+  // edit-mode-gated sub-toggle pattern.
+  const backgroundEditActive = ref(false)
+
+  // Which root space (building/site) the 3D scene is scoped to. `null` = show
+  // everything (legacy behavior for datasets with no building/floor hierarchy).
+  const activeRootSpaceId = ref<string | null>(null)
+  // Landing view. Defaults to '3d' so single-site/legacy datasets keep behaving
+  // exactly as before; the 2D campus overview is opt-in via the view switcher.
+  const viewMode = ref<'2d' | '3d'>('3d')
 
   const fontScale = ref(loadFontScale())
   function loadFontScale(): number {
@@ -83,6 +95,8 @@ export const useUIStore = defineStore('ui', () => {
     selection.value?.type === 'space'  ? selection.value.id : null)
   const selectedLinkId   = computed(() =>
     selection.value?.type === 'link'   ? selection.value.id : null)
+  const selectedBackgroundId = computed(() =>
+    selection.value?.type === 'background' ? selection.value.id : null)
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function setMode(m: EditorMode) {
@@ -91,7 +105,25 @@ export const useUIStore = defineStore('ui', () => {
     if (m === 'view') {
       linkToolActive.value = false
       linkSourceDeviceId.value = null
+      backgroundEditActive.value = false
     }
+  }
+
+  function toggleBackgroundEdit() {
+    if (mode.value !== 'edit') {
+      backgroundEditActive.value = false
+      return
+    }
+    backgroundEditActive.value = !backgroundEditActive.value
+  }
+
+  function enterScope(id: string | null) {
+    activeRootSpaceId.value = id
+    viewMode.value = '3d'
+  }
+
+  function showOverview() {
+    viewMode.value = '2d'
   }
 
   function select(target: SelectionTarget | null) {
@@ -155,10 +187,12 @@ export const useUIStore = defineStore('ui', () => {
     showRackServerList, selectedRackForList,
     showSavedViews, showChangeLog, showTimeline, showMinimap,
     showParticles, showBlastRadius, showVirtualNodes, showHelp, showImport, showAlertPanel, showCustomTypes,
+    showBackgroundPanel, backgroundEditActive, toggleBackgroundEdit,
     fontScale, setFontScale,
     timelineFrameIdx, timelineRecording, wsConnected, blastSourceId,
     tooltip,
-    selectedDeviceId, selectedSpaceId, selectedLinkId,
+    activeRootSpaceId, viewMode, enterScope, showOverview,
+    selectedDeviceId, selectedSpaceId, selectedLinkId, selectedBackgroundId,
     setMode, select, toggleLinkTool,
     startLinkFrom, cancelLinkDraft,
     showContextMenu, hideContextMenu,

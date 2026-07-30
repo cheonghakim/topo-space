@@ -14,6 +14,26 @@ interface Particle {
 }
 
 const MAX_PARTICLES = 4000
+const PARTICLE_SPEED   = 5    // constant u/s for every link, regardless of length or traffic
+const PARTICLE_SPACING = 3.5  // world-units between particles — keeps dot density uniform across link lengths
+
+// A soft radial-gradient dot, generated once — turns the default hard-edged
+// point squares into glowing "energy" particles with no bundled asset.
+function makeGlowSprite(): THREE.CanvasTexture {
+  const size = 32
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  grad.addColorStop(0,   'rgba(255,255,255,1)')
+  grad.addColorStop(0.35,'rgba(255,255,255,0.85)')
+  grad.addColorStop(1,   'rgba(255,255,255,0)')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, size, size)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.needsUpdate = true
+  return tex
+}
 
 function buildSegmentInfo(path: THREE.Vector3[]) {
   const lengths: number[] = []
@@ -63,7 +83,8 @@ export class ParticleRenderer {
     geo.setDrawRange(0, 0)
 
     const mat = new THREE.PointsMaterial({
-      size: 0.22,
+      size: 0.32,
+      map: makeGlowSprite(),
       vertexColors: true,
       transparent: true,
       opacity: 0.95,
@@ -79,7 +100,6 @@ export class ParticleRenderer {
   syncLinks(
     links: NetworkLink[],
     getPath: (linkId: string) => THREE.Vector3[] | null,
-    getTraffic: (deviceId: string) => number,
   ) {
     this.particles = []
 
@@ -91,12 +111,10 @@ export class ParticleRenderer {
       const { lengths, total } = buildSegmentInfo(path)
       if (total === 0) return
 
-      const style   = LINK_STYLE[link.type] ?? LINK_STYLE.manual
-      const color   = new THREE.Color(style.color)
-      const traffic = getTraffic(link.sourceDeviceId)
+      const style = LINK_STYLE[link.type] ?? LINK_STYLE.manual
+      const color = new THREE.Color(style.color)
 
-      const pCount  = Math.min(Math.max(Math.floor(traffic / 150), 2), 6)
-      const baseSpd = 3.5 + Math.min(traffic / 1000, 1) * 4.5
+      const pCount = Math.min(Math.max(Math.round(total / PARTICLE_SPACING), 2), 6)
 
       for (let i = 0; i < pCount; i++) {
         this.particles.push({
@@ -106,7 +124,7 @@ export class ParticleRenderer {
           segmentLengths: lengths,
           totalLength:    total,
           t:              i / pCount,
-          speed:          baseSpd * (0.85 + Math.random() * 0.3),
+          speed:          PARTICLE_SPEED,
           color:          color.clone(),
         })
       }
@@ -150,6 +168,8 @@ export class ParticleRenderer {
   dispose() {
     this.scene.remove(this.points)
     this.points.geometry.dispose()
-    ;(this.points.material as THREE.Material).dispose()
+    const mat = this.points.material as THREE.PointsMaterial
+    mat.map?.dispose()
+    mat.dispose()
   }
 }

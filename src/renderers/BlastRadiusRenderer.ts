@@ -1,5 +1,9 @@
 import * as THREE from 'three'
 
+// Pinned to floor height, matching the device selection ring, so rings stay
+// level across devices mounted at different heights within a rack.
+const FLOOR_Y = 0.03
+
 interface RingObj { mesh: THREE.Mesh; hop: number; deviceId: string }
 
 export interface BlastInfo {
@@ -36,12 +40,13 @@ export class BlastRadiusRenderer {
         opacity: hop === 1 ? 0.7 : 0.4,
         side: THREE.DoubleSide,
         depthWrite: false,
+        depthTest: false,
         blending: THREE.AdditiveBlending,
       })
       const mesh = new THREE.Mesh(geo, mat)
       mesh.rotation.x = -Math.PI / 2
-      mesh.position.set(pos.x, pos.y + 0.3, pos.z)
-      mesh.renderOrder = 1
+      mesh.position.set(pos.x, FLOOR_Y, pos.z)
+      mesh.renderOrder = 999
       this.scene.add(mesh)
       this.rings.push({ mesh, hop, deviceId })
 
@@ -53,12 +58,13 @@ export class BlastRadiusRenderer {
         opacity: 0.2,
         side: THREE.DoubleSide,
         depthWrite: false,
+        depthTest: false,
         blending: THREE.AdditiveBlending,
       })
       const mesh2 = new THREE.Mesh(geo2, mat2)
       mesh2.rotation.x = -Math.PI / 2
-      mesh2.position.set(pos.x, pos.y + 0.3, pos.z)
-      mesh2.renderOrder = 1
+      mesh2.position.set(pos.x, FLOOR_Y, pos.z)
+      mesh2.renderOrder = 999
       this.scene.add(mesh2)
       this.rings.push({ mesh: mesh2, hop, deviceId })
     })

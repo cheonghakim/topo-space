@@ -3,6 +3,8 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { Space } from '@/types'
 
 const SPACE_COLORS: Record<string, { floor: number; edge: number }> = {
+  building:      { floor: 0x0d1526, edge: 0x1a2a4a },
+  floor:         { floor: 0x0d1526, edge: 0x1a2a4a },
   site:          { floor: 0x0d1526, edge: 0x1a2a4a },
   zone:          { floor: 0x0f1e35, edge: 0x1e3560 },
   security_zone: { floor: 0x2a0a0a, edge: 0x5a1010 },
@@ -36,7 +38,7 @@ export class SpaceRenderer {
 
     if (space.type === 'rack') {
       this._buildRack(group, space, size, colors)
-    } else if (space.type === 'site') {
+    } else if (space.type === 'site' || space.type === 'floor' || space.type === 'building') {
       this._buildSite(group, space, size, colors)
     } else {
       this._buildZone(group, space, size, colors)
@@ -192,7 +194,7 @@ export class SpaceRenderer {
 
   private shouldShowBadge(type: Space['type'], source?: Space['source'], cameraDistance = 0): boolean {
     const count = this.objects.size
-    if (type === 'site') return true
+    if (type === 'site' || type === 'floor' || type === 'building') return true
     if (type === 'rack' && source === 'import') return false
     // Distance-based LOD: hide detail labels when camera is far
     if (cameraDistance > 120) return false

@@ -40,6 +40,9 @@ export class DeviceRenderer {
   private dimmedIds       = new Set<string>()
   private searchLabels    = new Map<string, CSS2DObject>()
 
+  private selectionRing: THREE.Mesh | null = null
+  private selectedDeviceId: string | null = null
+
   constructor(scene: THREE.Scene) {
     this.scene = scene
   }
@@ -303,6 +306,38 @@ export class DeviceRenderer {
     })
   }
 
+  // Selection is shown as a ground ring rather than an instance-color tint,
+  // since the pulse animation on warning/critical devices (see pulseStatus)
+  // overwrites instance colors every frame and would mask a color-based marker.
+  setSelectedDevice(deviceId: string | null) {
+    this.selectedDeviceId = deviceId
+    if (!deviceId) {
+      if (this.selectionRing) this.selectionRing.visible = false
+      return
+    }
+    if (!this.selectionRing) {
+      const geo = new THREE.RingGeometry(0.85, 1.05, 32)
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x60a5fa, transparent: true, opacity: 0.95,
+        side: THREE.DoubleSide, depthTest: false,
+      })
+      this.selectionRing = new THREE.Mesh(geo, mat)
+      this.selectionRing.rotation.x = -Math.PI / 2
+      this.selectionRing.renderOrder = 999
+      this.scene.add(this.selectionRing)
+    }
+    this.selectionRing.visible = true
+    this.tick()
+  }
+
+  // Keeps the selection ring pinned under the selected device even while it's
+  // being dragged; called once per frame from the render loop.
+  tick() {
+    if (!this.selectedDeviceId || !this.selectionRing?.visible) return
+    const pos = this.getDeviceWorldPos(this.selectedDeviceId)
+    if (pos) this.selectionRing.position.set(pos.x, 0.03, pos.z)
+  }
+
   getDeviceWorldPos(deviceId: string): THREE.Vector3 | null {
     const ref  = this.instanceIndex.get(deviceId)
     if (!ref) return null
@@ -317,6 +352,13 @@ export class DeviceRenderer {
 
   dispose() {
     this.clearSearchLabels()
+    if (this.selectionRing) {
+      this.scene.remove(this.selectionRing)
+      this.selectionRing.geometry.dispose()
+      ;(this.selectionRing.material as THREE.Material).dispose()
+      this.selectionRing = null
+    }
+    this.selectedDeviceId = null
     this.instancedMeshes.forEach(mesh => {
       // Don't dispose mesh.geometry here — it's shared with the module-level
       // geometry cache. disposeGeometryCache() handles cleanup and clears the
