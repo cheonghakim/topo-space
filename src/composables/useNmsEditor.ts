@@ -24,7 +24,7 @@ import type { GizmoAxis } from "@/interaction/ArrowGizmo";
 import { TimelineManager } from "@/core/TimelineManager";
 import { useEditorStore } from "@/stores/editor";
 import { useUIStore } from "@/stores/ui";
-import { syncCustomTypes } from "@/utils/colorUtils";
+import { syncCustomTypes, applyColorMode } from "@/utils/colorUtils";
 import {
   syncCustomGeometries,
   preloadCustomModels,
@@ -102,6 +102,9 @@ function createNmsEditorRuntime(
   let _fpsWindowStart = 0;
   let _fpsFrames = 0;
   let _lastPerfWarning = 0;
+  let _autoPerfModeApplied = false;
+  let _offscreenRaycaster: THREE.Raycaster | null = null;
+  let _lastOffscreenCheck = 0;
 
   interface LayoutSnap {
     mappings: [string, import("@/types").DeviceMapping][];
@@ -185,6 +188,7 @@ function createNmsEditorRuntime(
       onChange: options.onChange,
     });
     ui.setMode(options.mode ?? ui.mode);
+    applyColorMode(ui.colorblindMode ? "colorblind" : "default");
 
     scene.init(canvas, overlay, wrapper, {
       onError: (error, context) => options.onError?.(error, context),
@@ -298,6 +302,14 @@ function createNmsEditorRuntime(
   }
 
   function _bindWatchers() {
+    _watchStops.push(
+      watch(
+        () => ui.fontScale,
+        (s) => device.setLabelScale(s),
+        { immediate: true },
+      ),
+    );
+
     editor.devices.forEach((d) => _prevStatus.set(d.id, d.status ?? "unknown"));
     _watchStops.push(
       watch(
@@ -559,7 +571,7 @@ function createNmsEditorRuntime(
     _watchStops.push(
       watch(
         () =>
-          `${ui.filter.search}|${ui.filter.status.join(",")}|${ui.filter.type.join(",")}`,
+          `${ui.filter.search}|${ui.filter.status.join(",")}|${ui.filter.type.join(",")}|${ui.alertsOnly}`,
         () => applySearchFilter(),
       ),
     );
@@ -660,7 +672,8 @@ function createNmsEditorRuntime(
   function applySearchFilter() {
     const f = ui.filter;
     const q = f.search.toLowerCase().trim();
-    const hasFilter = !!q || f.status.length > 0 || f.type.length > 0;
+    const hasFilter =
+      !!q || f.status.length > 0 || f.type.length > 0 || ui.alertsOnly;
     if (!hasFilter) {
       device.applySearchFilter(new Set(), false);
       return;
@@ -675,7 +688,9 @@ function createNmsEditorRuntime(
         !f.status.length || f.status.includes(dev.status ?? "unknown");
       const deviceType = (dev.normalizedType ?? "unknown") as DeviceType;
       const matchType = !f.type.length || f.type.includes(deviceType);
-      if (matchSearch && matchStatus && matchType) matchingIds.add(dev.id);
+      const matchAlerts = !ui.alertsOnly || dev.status !== "normal";
+      if (matchSearch && matchStatus && matchType && matchAlerts)
+        matchingIds.add(dev.id);
     });
     device.applySearchFilter(matchingIds, true);
     device.setSearchFocus(matchingIds, (id) => {
@@ -695,6 +710,7 @@ function createNmsEditorRuntime(
       space.updateLod(scene.camera, scene.controls.target);
       device.tick();
       if (ui.showParticles) particle.update(delta, ui.visibleLinkTypes);
+      _updateOffscreenAlerts(elapsed);
 
       // warning/critical pulse
       if (!hasActiveFilter()) {
@@ -726,8 +742,116 @@ function createNmsEditorRuntime(
     return (
       !!ui.filter.search.trim() ||
       ui.filter.status.length > 0 ||
-      ui.filter.type.length > 0
+      ui.filter.type.length > 0 ||
+      ui.alertsOnly
     );
+  }
+
+  // Off-screen / occluded critical-alert radar: a dense rack or a bad camera
+  // angle can hide a real alarm indefinitely (the 3D scene has no other way
+  // to surface it).
+  //
+  // Split into two passes with very different costs:
+  //   - _offscreenMembers: WHICH devices currently need an arrow. Raycasts
+  //     per candidate, so it's throttled to a few times a second.
+  //   - the per-frame call below: WHERE on screen each arrow sits. Pure
+  //     projection math, no raycasting — runs every frame so arrows track
+  //     camera movement smoothly instead of visibly snapping into place
+  //     every ~250ms (that snap was reported as stutter/lag while panning).
+  let _offscreenMembers: { id: string; status: "critical" | "warning" }[] = [];
+
+  function _refreshOffscreenMembers() {
+    const candidates = editor
+      .scopedDevices(ui.activeRootSpaceId)
+      .filter((d) => d.status === "critical" || d.status === "warning")
+      .sort((a) => (a.status === "critical" ? -1 : 1));
+
+    if (!candidates.length) {
+      _offscreenMembers = [];
+      return;
+    }
+
+    _offscreenRaycaster ??= new THREE.Raycaster();
+    const cam = scene.camera;
+    const camPos = cam.position;
+    const meshes = [...device.getInstancedMeshes(), ...space.getHitMeshes()];
+
+    const members: typeof _offscreenMembers = [];
+    for (const dev of candidates) {
+      if (members.length >= 12) break;
+      const pos = device.getDeviceWorldPos(dev.id);
+      if (!pos) continue;
+
+      const ndc = pos.clone().project(cam);
+      const offscreen = Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1 || ndc.z > 1 || ndc.z < -1;
+
+      let occluded = false;
+      if (!offscreen) {
+        const dist = pos.distanceTo(camPos);
+        const dir = pos.clone().sub(camPos).normalize();
+        _offscreenRaycaster.set(camPos, dir);
+        _offscreenRaycaster.far = Math.max(dist - 0.15, 0);
+        occluded = _offscreenRaycaster.intersectObjects(meshes, false).length > 0;
+      }
+      if (!offscreen && !occluded) continue;
+
+      members.push({ id: dev.id, status: dev.status as "critical" | "warning" });
+    }
+    _offscreenMembers = members;
+  }
+
+  function _updateOffscreenAlerts(elapsed: number) {
+    if (!_canvas || !device) {
+      if (ui.offscreenAlerts.length) ui.offscreenAlerts = [];
+      return;
+    }
+
+    if (elapsed - _lastOffscreenCheck >= 0.25) {
+      _lastOffscreenCheck = elapsed;
+      _refreshOffscreenMembers();
+    }
+
+    if (!_offscreenMembers.length) {
+      if (ui.offscreenAlerts.length) ui.offscreenAlerts = [];
+      return;
+    }
+
+    const cam = scene.camera;
+    const w = _canvas.clientWidth || 1;
+    const h = _canvas.clientHeight || 1;
+
+    const results: typeof ui.offscreenAlerts = [];
+    for (const m of _offscreenMembers) {
+      const pos = device.getDeviceWorldPos(m.id);
+      if (!pos) continue;
+      const ndc = pos.clone().project(cam);
+
+      // Direction from screen center toward the (possibly behind-camera) NDC
+      // point, clamped to the viewport edge so the arrow always sits on the
+      // border pointing the right way.
+      let x = ndc.x;
+      let y = -ndc.y;
+      if (ndc.z > 1 || ndc.z < -1) { x = -x; y = -y; } // behind the camera: flip
+      const angle = Math.atan2(y, x);
+      const margin = 0.92;
+      const scale = Math.min(
+        margin / Math.max(Math.abs(x), 1e-6),
+        margin / Math.max(Math.abs(y), 1e-6),
+        1,
+      );
+      const cx = x * scale;
+      const cy = y * scale;
+
+      results.push({
+        id: m.id,
+        status: m.status,
+        edgeX: (cx * 0.5 + 0.5) * w,
+        edgeY: (cy * 0.5 + 0.5) * h,
+        angle: (angle * 180) / Math.PI + 90,
+      });
+    }
+
+    ui.offscreenAlerts = results;
   }
 
   function trackPerformance(delta: number, elapsed: number) {
@@ -747,6 +871,20 @@ function createNmsEditorRuntime(
         devices: editor.devices.size,
         links: editor.links.size,
       });
+
+      // Sustained low FPS used to be purely advisory — the host had to react
+      // to onPerformanceWarning itself, and nothing changed on screen if it
+      // didn't. Now the editor takes one concrete, reversible step on its own
+      // (drop the decorative traffic particles, the priciest per-frame cost
+      // that isn't load-bearing information) and tells the operator why.
+      if (ui.showParticles && !_autoPerfModeApplied) {
+        _autoPerfModeApplied = true;
+        ui.showParticles = false;
+        ui.addToast(
+          "Performance mode: link-traffic particles disabled (low frame rate detected)",
+          "warning",
+        );
+      }
     }
     _fpsWindowStart = elapsed;
     _fpsFrames = 0;
@@ -1071,6 +1209,10 @@ function createNmsEditorRuntime(
       if (ui.mode === "edit") ui.toggleLinkTool();
       return;
     }
+    if ((e.key === "]" || e.key === "[") && !isInputFocused()) {
+      cycleAlarms(e.key === "]" ? 1 : -1);
+      return;
+    }
 
     if (
       ui.mode === "edit" &&
@@ -1350,6 +1492,54 @@ function createNmsEditorRuntime(
     if (pos) camera.flyToDevice(pos);
   }
 
+  // Same reset the "F" key triggers (see onKeyDown) — exposed so a visible
+  // toolbar button can offer the same escape hatch to users who don't know
+  // the shortcut or who've lost their bearings in the 3D scene.
+  function resetCamera() {
+    camera.flyToOverview();
+  }
+
+  // Pans to a point picked on the 2D minimap while preserving the current
+  // camera-to-target offset (angle/zoom), rather than jumping to a fixed
+  // device-framing distance — mirrors how map-click navigation behaves in
+  // familiar 2D tools.
+  function flyToWorldPoint(x: number, z: number) {
+    camera.panToXZ(x, z);
+  }
+
+  function setDeviceAcknowledged(id: string, acked: boolean) {
+    device.setAcknowledged(id, acked);
+  }
+
+  function toggleColorblindMode() {
+    ui.setColorblindMode(!ui.colorblindMode);
+    applyColorMode(ui.colorblindMode ? "colorblind" : "default");
+    device.recolorAll();
+  }
+
+  // Cycles selection through active critical/warning devices on the current
+  // floor without touching the mouse — bound to "[" / "]" in onKeyDown.
+  // Severity-sorted so the worst alarm is always one keystroke away.
+  function _alarmDevices() {
+    const rank: Record<string, number> = { critical: 0, warning: 1 };
+    return editor
+      .scopedDevices(ui.activeRootSpaceId)
+      .filter((d) => d.status === "critical" || d.status === "warning")
+      .sort((a, b) => (rank[a.status ?? ""] ?? 9) - (rank[b.status ?? ""] ?? 9));
+  }
+
+  function cycleAlarms(direction: 1 | -1) {
+    const list = _alarmDevices();
+    if (!list.length) return;
+    const curIdx = list.findIndex((d) => d.id === ui.selectedDeviceId);
+    const nextIdx = curIdx === -1
+      ? (direction === 1 ? 0 : list.length - 1)
+      : (curIdx + direction + list.length) % list.length;
+    const next = list[nextIdx];
+    ui.select({ type: "device", id: next.id });
+    focusDevice(next.id);
+  }
+
   function focusSpace(id: string) {
     if (_switchScopeIfNeeded(id, { type: "space", id })) return;
     const sp = editor.spaces.get(id);
@@ -1480,6 +1670,7 @@ function createNmsEditorRuntime(
 
   function dispose() {
     _mounted = false;
+    ui.offscreenAlerts = [];
     _watchStops.splice(0).forEach((stop) => stop());
     _canvas?.removeEventListener("pointerdown", onPointerDown);
     _canvas?.removeEventListener("pointermove", onPointerMove);
@@ -1514,6 +1705,11 @@ function createNmsEditorRuntime(
     focusDevice,
     focusSpace,
     focusVirtualNode,
+    resetCamera,
+    flyToWorldPoint,
+    setDeviceAcknowledged,
+    toggleColorblindMode,
+    cycleAlarms,
     onTimelineScrub,
     refreshSpace,
     rebuildAll,

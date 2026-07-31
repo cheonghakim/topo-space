@@ -49,4 +49,14 @@ export class CameraController {
   flyToOverview() {
     animateTo(this.camera, this.controls, new THREE.Vector3(0, 60, 80), new THREE.Vector3(0, 0, 0), 700)
   }
+
+  // Moves the current view (angle + zoom preserved) so it's centered on a new
+  // XZ point — used for minimap click-to-navigate, where jumping to a fixed
+  // device-framing distance would be jarring.
+  panToXZ(x: number, z: number) {
+    const target = new THREE.Vector3(x, this.controls.target.y, z)
+    const delta  = target.clone().sub(this.controls.target)
+    const eye    = this.camera.position.clone().add(delta)
+    animateTo(this.camera, this.controls, eye, target, 500)
+  }
 }

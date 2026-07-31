@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { RawDevice, DeviceMapping, DeviceStatus } from '@/types'
-import { STATUS_COLOR_THREE, getTypeColor } from '@/utils/colorUtils'
+import { STATUS_COLOR_THREE, STATUS_COLOR_HEX, STATUS_ICON, getTypeColor } from '@/utils/colorUtils'
 import { getDeviceGeometry, disposeGeometryCache } from '@/utils/geometryFactory'
 
 const _matCache = new Map<string, THREE.MeshStandardMaterial>()
@@ -40,11 +40,71 @@ export class DeviceRenderer {
   private dimmedIds       = new Set<string>()
   private searchLabels    = new Map<string, CSS2DObject>()
 
+  // Non-color status redundancy — a small icon badge shown above every
+  // non-normal device, plus an ack checkmark. Never gated on search/dim state:
+  // status must stay legible regardless of what else is happening on screen.
+  private statusBadges    = new Map<string, CSS2DObject>()
+  private ackedIds        = new Set<string>()
+
+  // The app's font-scale preference deliberately excludes the 3D canvas
+  // itself (App.vue zooms chrome only), but that left the two label types
+  // this class draws — search-match tags and status badges — stuck at a
+  // fixed size even for users who'd bumped text size up for readability.
+  // Applied via a separate channel: this multiplier, driven by useNmsEditor's
+  // watch on ui.fontScale.
+  private labelScale = 1
+
   private selectionRing: THREE.Mesh | null = null
   private selectedDeviceId: string | null = null
 
   constructor(scene: THREE.Scene) {
     this.scene = scene
+  }
+
+  // Colorblind-safe redundancy: renders a small icon badge above the device
+  // whenever its status isn't 'normal', or it's been acknowledged. Independent
+  // of instance color, search dimming, and hover/selection highlight state.
+  private _updateBadge(deviceId: string, status: DeviceStatus) {
+    const existing = this.statusBadges.get(deviceId)
+    if (existing) {
+      this.scene.remove(existing)
+      existing.element.remove()
+      this.statusBadges.delete(deviceId)
+    }
+
+    const acked = this.ackedIds.has(deviceId)
+    const icon  = STATUS_ICON[status]
+    if (!icon && !acked) return
+
+    const pos = this.getDeviceWorldPos(deviceId)
+    if (!pos) return
+
+    const el = document.createElement('div')
+    el.className = 'device-status-badge'
+    el.style.cssText = `
+      display:flex; align-items:center; gap:3px;
+      background:rgba(15,23,42,.92); border:1px solid ${STATUS_COLOR_HEX[status]};
+      border-radius:5px; padding:1px 5px; pointer-events:none; white-space:nowrap;
+      font-family:monospace; font-size:${11 * this.labelScale}px; font-weight:700; color:${STATUS_COLOR_HEX[status]};`
+    el.textContent = icon
+    if (acked) {
+      const ack = document.createElement('span')
+      ack.textContent = STATUS_ICON.acknowledged
+      ack.style.cssText = 'color:#4ade80;'
+      el.appendChild(ack)
+    }
+
+    const badge = new CSS2DObject(el)
+    badge.position.copy(pos).add(new THREE.Vector3(0, 1.3, 0))
+    this.scene.add(badge)
+    this.statusBadges.set(deviceId, badge)
+  }
+
+  setAcknowledged(deviceId: string, acked: boolean) {
+    if (acked) this.ackedIds.add(deviceId)
+    else this.ackedIds.delete(deviceId)
+    const status = this.statusMap.get(deviceId)
+    if (status) this._updateBadge(deviceId, status)
   }
 
 
@@ -85,6 +145,7 @@ export class DeviceRenderer {
         this.instanceColors.set(item.device.id, color.clone())
         this.statusMap.set(item.device.id, status)
         mesh.userData[`device_${i}`] = item.device.id
+        if (item.mapping.operatorState?.acknowledged) this.ackedIds.add(item.device.id)
       })
 
       mesh.instanceMatrix.needsUpdate = true
@@ -92,6 +153,8 @@ export class DeviceRenderer {
       this.instancedMeshes.set(type, mesh)
       this.scene.add(mesh)
     })
+
+    this.instanceIndex.forEach((_, id) => this._updateBadge(id, this.statusMap.get(id) ?? 'unknown'))
   }
 
   addDevice(dev: RawDevice, mapping: DeviceMapping) {
@@ -123,6 +186,8 @@ export class DeviceRenderer {
       this.instanceIndex.set(dev.id, { type, idx })
       this.instanceColors.set(dev.id, color.clone())
       this.statusMap.set(dev.id, status)
+      if (mapping.operatorState?.acknowledged) this.ackedIds.add(dev.id)
+      this._updateBadge(dev.id, status)
     } else {
       // No mesh or no capacity — rebuild mesh for this type including new device
       const existing: Array<{ id: string; pos: THREE.Vector3; status: DeviceStatus }> = []
@@ -166,6 +231,8 @@ export class DeviceRenderer {
       if (newMesh.instanceColor) newMesh.instanceColor.needsUpdate = true
       this.instancedMeshes.set(type, newMesh)
       this.scene.add(newMesh)
+      if (mapping.operatorState?.acknowledged) this.ackedIds.add(dev.id)
+      this._updateBadge(dev.id, status)
     }
   }
 
@@ -184,6 +251,7 @@ export class DeviceRenderer {
     mesh.setColorAt(ref.idx, color)
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     this.instanceColors.set(deviceId, color)
+    this._updateBadge(deviceId, status)
   }
 
   pulseStatus(deviceId: string, status: DeviceStatus, t: number) {
@@ -236,7 +304,7 @@ export class DeviceRenderer {
       el.style.cssText = `
         background:rgba(250,204,21,.96);border:1px solid #fef08a;border-radius:6px;
         box-shadow:0 0 18px rgba(250,204,21,.8),0 0 2px #000;
-        color:#111827;font-size:11px;font-weight:700;font-family:monospace;
+        color:#111827;font-size:${11 * this.labelScale}px;font-weight:700;font-family:monospace;
         padding:3px 8px;white-space:nowrap;pointer-events:none;`
       el.textContent = labelFor(id) ?? id
 
@@ -297,13 +365,58 @@ export class DeviceRenderer {
         const isMatch = matchingIds.has(deviceId)
         const status  = this.statusMap.get(deviceId)
         if (!status) continue
+        // Matches keep their real status color — overwriting it (as this used
+        // to do with a fixed yellow) hid whether a matched device was actually
+        // critical/warning/normal. The CSS2D label from setSearchFocus already
+        // marks "this is a match"; color still has to answer "how bad is it".
         const base = STATUS_COLOR_THREE[status].clone()
-        const color = isMatch ? new THREE.Color(0xfff176) : base.clone().multiplyScalar(0.08)
+        const color = isMatch ? base.clone() : base.clone().multiplyScalar(0.3)
         mesh.setColorAt(i, color)
         this.instanceColors.set(deviceId, color)
       }
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     })
+  }
+
+  setLabelScale(scale: number) {
+    if (scale === this.labelScale) return
+    this.labelScale = scale
+    this.statusBadges.forEach((_, id) => {
+      const status = this.statusMap.get(id)
+      if (status) this._updateBadge(id, status)
+    })
+    // Search labels are rebuilt from the currently-matching set the next
+    // time applySearchFilter runs; if one is active right now, refresh it
+    // immediately rather than waiting for the next filter change.
+    if (this.searchLabels.size) {
+      const ids = new Set(this.searchLabels.keys())
+      const texts = new Map(
+        [...this.searchLabels.entries()].map(([id, label]) => [id, label.element.textContent ?? id]),
+      )
+      this.setSearchFocus(ids, (id) => texts.get(id))
+    }
+  }
+
+  // Re-applies STATUS_COLOR_THREE to every instance, respecting whatever
+  // dim/match state is currently active — called after applyColorMode() (in
+  // colorUtils.ts) swaps the palette in place, since the Color objects this
+  // renderer already cloned into instanceColors won't update on their own.
+  recolorAll() {
+    this.instancedMeshes.forEach((mesh) => {
+      for (let i = 0; i < mesh.count; i++) {
+        const deviceId = mesh.userData[`device_${i}`] as string
+        if (!deviceId) continue
+        const status = this.statusMap.get(deviceId)
+        if (!status) continue
+        const base = STATUS_COLOR_THREE[status].clone()
+        const isMatch = this.dimmedIds.size === 0 || this.dimmedIds.has(deviceId)
+        const color = isMatch ? base.clone() : base.clone().multiplyScalar(0.3)
+        mesh.setColorAt(i, color)
+        this.instanceColors.set(deviceId, color)
+      }
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    })
+    this.statusMap.forEach((status, id) => this._updateBadge(id, status))
   }
 
   // Selection is shown as a ground ring rather than an instance-color tint,
@@ -333,9 +446,14 @@ export class DeviceRenderer {
   // Keeps the selection ring pinned under the selected device even while it's
   // being dragged; called once per frame from the render loop.
   tick() {
-    if (!this.selectedDeviceId || !this.selectionRing?.visible) return
-    const pos = this.getDeviceWorldPos(this.selectedDeviceId)
-    if (pos) this.selectionRing.position.set(pos.x, 0.03, pos.z)
+    if (this.selectedDeviceId && this.selectionRing?.visible) {
+      const pos = this.getDeviceWorldPos(this.selectedDeviceId)
+      if (pos) this.selectionRing.position.set(pos.x, 0.03, pos.z)
+    }
+    this.statusBadges.forEach((badge, id) => {
+      const pos = this.getDeviceWorldPos(id)
+      if (pos) badge.position.copy(pos).add(new THREE.Vector3(0, 1.3, 0))
+    })
   }
 
   getDeviceWorldPos(deviceId: string): THREE.Vector3 | null {
@@ -352,6 +470,12 @@ export class DeviceRenderer {
 
   dispose() {
     this.clearSearchLabels()
+    this.statusBadges.forEach((badge) => {
+      this.scene.remove(badge)
+      badge.element.remove()
+    })
+    this.statusBadges.clear()
+    this.ackedIds.clear()
     if (this.selectionRing) {
       this.scene.remove(this.selectionRing)
       this.selectionRing.geometry.dispose()

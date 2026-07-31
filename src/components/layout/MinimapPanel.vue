@@ -1,6 +1,10 @@
 <template>
   <div class="mm-wrap" v-if="ui.showMinimap">
-    <canvas ref="canvas" :width="W" :height="H" class="mm-canvas" />
+    <canvas
+      ref="canvas" :width="W" :height="H" class="mm-canvas"
+      title="Click to navigate"
+      @click="onClick"
+    />
     <button class="mm-close" @click="ui.showMinimap = false" title="Close minimap">✕</button>
   </div>
 </template>
@@ -10,6 +14,7 @@ import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { MinimapRenderer } from '@/renderers/MinimapRenderer'
 import { useEditorStore }  from '@/stores/editor'
 import { useUIStore }      from '@/stores/ui'
+import { useNmsEditor }    from '@/composables/useNmsEditor'
 import * as THREE from 'three'
 
 const props = defineProps<{
@@ -21,8 +26,16 @@ const W = 180, H = 130
 const canvas  = ref<HTMLCanvasElement | null>(null)
 const editor  = useEditorStore()
 const ui      = useUIStore()
+const { flyToWorldPoint } = useNmsEditor()
 let renderer: MinimapRenderer | null = null
 let rafId: number | null = null
+
+function onClick(e: MouseEvent) {
+  if (!renderer || !canvas.value) return
+  const rect = canvas.value.getBoundingClientRect()
+  const { x, z } = renderer.toWorld(e.clientX - rect.left, e.clientY - rect.top)
+  flyToWorldPoint(x, z)
+}
 
 onMounted(() => {
   if (!canvas.value) return
@@ -62,7 +75,7 @@ onBeforeUnmount(() => { if (rafId) cancelAnimationFrame(rafId) })
   border: 1px solid #2a4a8a; border-radius: 6px; overflow: hidden;
   z-index: 150; pointer-events: none;
 }
-.mm-canvas { display: block; }
+.mm-canvas { display: block; pointer-events: all; cursor: pointer; }
 .mm-close {
   position: absolute; top: 3px; right: 3px;
   background: rgba(8,12,24,.8); border: none; color: #475569;

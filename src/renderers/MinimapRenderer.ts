@@ -25,6 +25,19 @@ export class MinimapRenderer {
     }
   }
 
+  // Inverse of toMM — used to translate a click on the minimap canvas back
+  // into a world XZ point for click-to-navigate.
+  toWorld(px: number, py: number): { x: number; z: number } {
+    const { minX, maxX, minZ, maxZ } = this.bounds
+    const margin = 8
+    const w = this.canvas.width  - margin * 2
+    const h = this.canvas.height - margin * 2
+    return {
+      x: minX + ((px - margin) / w) * (maxX - minX),
+      z: minZ + ((py - margin) / h) * (maxZ - minZ),
+    }
+  }
+
   render(
     spaces: Space[],
     devices: RawDevice[],

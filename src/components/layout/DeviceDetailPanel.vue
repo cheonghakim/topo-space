@@ -10,6 +10,7 @@
           <div class="dev-ip">{{ device.ip }}</div>
         </div>
         <span class="status-badge" :class="device.status">{{ STATUS_LABEL[device.status ?? 'unknown'] }}</span>
+        <span v-if="mapping?.operatorState?.acknowledged" class="ack-badge" title="Acknowledged — original status is preserved above">✓ Ack</span>
         <button class="close-btn" @click="ui.select(null)" title="Close">✕</button>
       </div>
     </div>
@@ -99,10 +100,17 @@
       <section class="section actions" v-if="ui.mode === 'edit'">
         <div class="sec-title">Actions</div>
         <div class="action-btns">
-          <button class="act-btn isolate"  @click="isolate">Isolate</button>
-          <button class="act-btn recover"  @click="recover">Recover</button>
-          <button class="act-btn ack"      @click="acknowledge">Acknowledge</button>
+          <button class="act-btn isolate"  @click="isolate" title="Simulated — updates this visualization only, does not control the real device">Isolate</button>
+          <button class="act-btn recover"  @click="recover" title="Simulated — updates this visualization only, does not control the real device">Recover</button>
+          <button
+            class="act-btn ack"
+            @click="mapping?.operatorState?.acknowledged ? unacknowledge() : acknowledge()"
+          >{{ mapping?.operatorState?.acknowledged ? 'Unacknowledge' : 'Acknowledge' }}</button>
           <button class="act-btn unmap" v-if="ui.mode === 'edit'" @click="unmapDevice">Remove from map</button>
+        </div>
+        <div class="assign-row">
+          <input v-model="assignee" class="anno-input" placeholder="Assign to…" />
+          <button class="save-btn" @click="saveAssignment">Save</button>
         </div>
         <div v-if="actionLog" class="action-log">{{ actionLog }}</div>
       </section>
@@ -122,7 +130,7 @@ const editor = useEditorStore()
 const ui     = useUIStore()
 
 const { allTypes, typeColor, typeAbbr } = useDeviceTypeHelpers()
-const { rebuildAll } = useNmsEditor()
+const { rebuildAll, setDeviceAcknowledged } = useNmsEditor()
 
 const ifaceOpen  = ref(false)
 const actionLog  = ref('')
@@ -130,6 +138,7 @@ const displayName = ref('')
 const memo       = ref('')
 const tagsStr    = ref('')
 const visualType = ref<string>('')
+const assignee   = ref('')
 
 const device  = computed(() => ui.selectedDeviceId ? editor.devices.get(ui.selectedDeviceId) ?? null : null)
 const mapping = computed(() => device.value ? editor.getMappingByDeviceId(device.value.id) ?? null : null)
@@ -142,6 +151,7 @@ watch(mapping, m => {
   memo.value        = m?.memo ?? ''
   tagsStr.value     = m?.tags?.join(', ') ?? ''
   visualType.value  = m?.visualType ?? ''
+  assignee.value    = m?.operatorState?.assignedTo ?? ''
 }, { immediate: true })
 
 function applyVisualType() {
@@ -165,9 +175,27 @@ const metrics = computed(() => {
 function bar(pct: number) { return pct >= 90 ? '#ef4444' : pct >= 70 ? '#eab308' : '#22c55e' }
 function fmt(n?: number)  { if (!n) return '0'; return n >= 1000 ? `${(n/1000).toFixed(1)}G` : `${n.toFixed(0)}M` }
 
-function isolate()     { if (device.value) editor.updateDeviceStatus(device.value.id, 'offline');  actionLog.value = `[${ts()}] Isolated` }
-function recover()     { if (device.value) editor.updateDeviceStatus(device.value.id, 'normal');   actionLog.value = `[${ts()}] Recovered` }
-function acknowledge() { if (device.value) editor.updateDeviceStatus(device.value.id, 'acknowledged'); actionLog.value = `[${ts()}] Acknowledged` }
+function isolate()     { if (device.value) editor.updateDeviceStatus(device.value.id, 'offline');  actionLog.value = `[${ts()}] Isolated (simulated)` }
+function recover()     { if (device.value) editor.updateDeviceStatus(device.value.id, 'normal');   actionLog.value = `[${ts()}] Recovered (simulated)` }
+
+function acknowledge() {
+  if (!device.value) return
+  editor.acknowledgeDevice(device.value.id)
+  setDeviceAcknowledged(device.value.id, true)
+  actionLog.value = `[${ts()}] Acknowledged (original status preserved)`
+}
+function unacknowledge() {
+  if (!device.value) return
+  editor.unacknowledgeDevice(device.value.id)
+  setDeviceAcknowledged(device.value.id, false)
+  actionLog.value = `[${ts()}] Acknowledgment cleared`
+}
+
+function saveAssignment() {
+  if (!device.value) return
+  editor.assignDevice(device.value.id, assignee.value.trim())
+  actionLog.value = assignee.value.trim() ? `[${ts()}] Assigned to ${assignee.value.trim()}` : `[${ts()}] Unassigned`
+}
 
 function saveAnnotation() {
   if (!device.value) return
@@ -212,6 +240,7 @@ function ts() { return new Date().toLocaleTimeString() }
 .status-badge.unknown      { background: #1e293b; color: #94a3b8; }
 .status-badge.maintenance  { background: #1e3a5f; color: #93c5fd; }
 .status-badge.stale        { background: #1e1a18; color: #78716c; }
+.ack-badge { padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 700; background: #052e16; color: #4ade80; border: 1px solid #14532d; white-space: nowrap; }
 .close-btn { background: none; border: none; color: #475569; cursor: pointer; margin-left: 4px; }
 .panel-body { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #1a2a4a transparent; }
 .section    { padding: 10px 12px; border-bottom: 1px solid #0f1f3a; }
@@ -271,5 +300,7 @@ function ts() { return new Date().toLocaleTimeString() }
 .act-btn.recover  { background: #052e16; border-color: #14532d; color: #86efac; }
 .act-btn.ack      { background: #422006; border-color: #7c2d12; color: #fdba74; }
 .act-btn.unmap    { background: #1e293b; border-color: #334155; color: #94a3b8; grid-column: span 2; }
+.assign-row       { display: flex; gap: 5px; margin-top: 6px; }
+.assign-row .anno-input { margin-top: 0; }
 .action-log { margin-top: 6px; background: #0f172a; border: 1px solid #1e3a5a; border-radius: 4px; padding: 5px 7px; font-size: 10px; font-family: monospace; color: #22c55e; }
 </style>

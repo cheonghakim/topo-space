@@ -38,6 +38,49 @@ test('makes search matches visually prominent', async ({ page }) => {
   await expect(page.locator('.device-search-label').first()).toBeVisible()
 })
 
+test('offers a visible camera reset control that does not error', async ({ page }) => {
+  await page.goto('/')
+
+  const errors: string[] = []
+  page.on('pageerror', (err) => errors.push(err.message))
+
+  await page.getByRole('button', { name: '⌂ Home', exact: true }).click()
+  await page.waitForTimeout(200)
+
+  expect(errors).toEqual([])
+})
+
+test('toggling the colorblind-safe palette recolors the scene without erroring', async ({ page }) => {
+  await page.goto('/')
+
+  const errors: string[] = []
+  page.on('pageerror', (err) => errors.push(err.message))
+
+  await page.getByText('Preferences').click()
+  await page.getByText('Colorblind-safe palette').click()
+  await page.waitForTimeout(200)
+
+  expect(errors).toEqual([])
+
+  // Toggling back should also be error-free (recolorAll runs a second time).
+  await page.getByText('Preferences').click()
+  await page.getByText('Colorblind-safe palette').click()
+  await page.waitForTimeout(200)
+
+  expect(errors).toEqual([])
+})
+
+test('alerts-only view hides normal devices from the search-match set', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByText('🔔 Alerts only').click()
+  await page.waitForTimeout(200)
+
+  // At least one alarm exists in the mock dataset, so the label layer should
+  // be populated the same way a text search would populate it.
+  await expect(page.locator('.device-search-label').first()).toBeVisible()
+})
+
 test('does not leave stale rack labels after CSV replace import', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Edit' }).click()

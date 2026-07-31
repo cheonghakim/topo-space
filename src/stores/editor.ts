@@ -11,7 +11,13 @@ import type {
 import { generateMockData } from '@/utils/mockDataGenerator'
 
 export const useEditorStore = defineStore('editor', () => {
-  const guard = new PermissionGuard({ topologyEdit: true, layoutEdit: true, spaceEdit: true, annotationEdit: true, import: true, backgroundEdit: true })
+  // Permissive bootstrap defaults used until a host explicitly calls
+  // configureSecurity({ features }) — covers local dev (main.ts mounts App.vue
+  // directly, with no createNmsEditor/features config at all) and any ad-hoc
+  // `createNmsEditor({ container })` call that skips `features`. A production
+  // embed that wants a locked-down/read-only editor must pass `features`
+  // explicitly, same as it already must to disable topologyEdit/import/etc.
+  const guard = new PermissionGuard({ topologyEdit: true, layoutEdit: true, spaceEdit: true, annotationEdit: true, import: true, backgroundEdit: true, chaosSimulator: true })
   let permissionDeniedHandler: ((ctx: PermissionContext) => void) | undefined
   let changeHandler: ((event: { type: string; target?: { id?: string; type?: string }; source: 'user' | 'api' | 'plugin' | 'system'; timestamp: number }) => void) | undefined
 
@@ -47,6 +53,10 @@ export const useEditorStore = defineStore('editor', () => {
 
   function can(action: EditorAction, target?: PermissionContext['target']): boolean {
     return guard.can(action, target)
+  }
+
+  function hasFeature(flag: Parameters<typeof guard.hasFeature>[0]): boolean {
+    return guard.hasFeature(flag)
   }
 
   function deny(action: EditorAction, target?: PermissionContext['target']) {
@@ -145,6 +155,14 @@ export const useEditorStore = defineStore('editor', () => {
   function scopedDevices(rootId: string | null): RawDevice[] {
     const ids = scopedDeviceIds(rootId)
     return [...devices.value.values()].filter(d => ids.has(d.id))
+  }
+
+  function scopedCriticalCount(rootId: string | null): number {
+    return scopedDevices(rootId).filter(d => d.status === 'critical').length
+  }
+
+  function scopedWarningCount(rootId: string | null): number {
+    return scopedDevices(rootId).filter(d => d.status === 'warning').length
   }
 
   function scopedLinks(rootId: string | null): NetworkLink[] {
@@ -333,6 +351,52 @@ export const useEditorStore = defineStore('editor', () => {
     emitChange('annotation:update', { id: deviceId, type: 'device' })
   }
 
+  // Acknowledging an alert records who/when confirmed it without touching
+  // device.status — overwriting status would destroy the original severity
+  // (there'd be no way to tell a confirmed critical from a confirmed warning).
+  function acknowledgeDevice(deviceId: string, by = 'operator') {
+    if (!requirePermission('annotation:update', { id: deviceId })) return
+    const m = getMappingByDeviceId(deviceId)
+    if (m) {
+      m.operatorState = {
+        ...m.operatorState,
+        acknowledged: true,
+        acknowledgedBy: by,
+        acknowledgedAt: new Date().toISOString(),
+      }
+    }
+    logChange('device.ack', `Acknowledged: ${devices.value.get(deviceId)?.hostname ?? deviceId}`)
+    emitChange('annotation:update', { id: deviceId, type: 'device' })
+  }
+
+  function unacknowledgeDevice(deviceId: string) {
+    if (!requirePermission('annotation:update', { id: deviceId })) return
+    const m = getMappingByDeviceId(deviceId)
+    if (m && m.operatorState) {
+      m.operatorState = { ...m.operatorState, acknowledged: false, acknowledgedBy: undefined, acknowledgedAt: undefined }
+    }
+    emitChange('annotation:update', { id: deviceId, type: 'device' })
+  }
+
+  // Lightweight self-service triage — not a ticket/SOAR integration, just
+  // enough for "who's on this" to be visible in the Alert panel without
+  // leaving the app. Empty string clears the assignment.
+  function assignDevice(deviceId: string, assignee: string) {
+    if (!requirePermission('annotation:update', { id: deviceId })) return
+    const m = getMappingByDeviceId(deviceId)
+    if (m) {
+      m.operatorState = {
+        ...m.operatorState,
+        assignedTo: assignee || undefined,
+        assignedAt: assignee ? new Date().toISOString() : undefined,
+      }
+    }
+    logChange('device.assign', assignee
+      ? `Assigned ${devices.value.get(deviceId)?.hostname ?? deviceId} to ${assignee}`
+      : `Unassigned ${devices.value.get(deviceId)?.hostname ?? deviceId}`)
+    emitChange('annotation:update', { id: deviceId, type: 'device' })
+  }
+
   function addLink(link: NetworkLink) {
     if (!requirePermission('topology:createLink', { id: link.id })) return
     links.value.set(link.id, link)
@@ -408,9 +472,16 @@ export const useEditorStore = defineStore('editor', () => {
   }
 
   // ── Change Log ───────────────────────────────────────────────────────────
+  // This panel is a rolling view of the most recent 100 entries, not a durable
+  // audit trail — hosts that need permanent audit records should persist the
+  // `onChange` callback events (see configureSecurity) to their own store.
   function logChange(type: string, msg: string) {
     changeLog.value.unshift({ id: Math.random().toString(36).slice(2), type, msg, ts: new Date().toLocaleTimeString() })
     if (changeLog.value.length > 100) changeLog.value.pop()
+  }
+
+  function exportChangeLog(): string {
+    return JSON.stringify(changeLog.value, null, 2)
   }
 
   // ── Import / Export ──────────────────────────────────────────────────────
@@ -669,13 +740,14 @@ export const useEditorStore = defineStore('editor', () => {
     devicesBySpace, interfacesByDevice, rackSpaces, allSpacesList,
     rootSpaces, childSpaces, descendantSpaceIds,
     scopedSpaces, scopedDeviceIds, scopedDevices, scopedLinks, scopedBounds,
-    scopedBackgroundObjects,
+    scopedBackgroundObjects, scopedCriticalCount, scopedWarningCount,
     resolveLeafScope,
-    configureSecurity, setEditorMode, can,
+    configureSecurity, setEditorMode, can, hasFeature,
     loadMockData, replaceData, updateDeviceStatus, updateLinkStatus, upsertDevices, addManualDevice,
     importTopology,
     addSpace, updateSpace, archiveSpace,
     mapDevice, unmapDevice, updateAnnotation, setVisualType,
+    acknowledgeDevice, unacknowledgeDevice, assignDevice,
     addLink, updateLink, removeLink,
     getMappingByDeviceId, getDevice,
     virtualNodes, savedViews, changeLog,
@@ -683,6 +755,6 @@ export const useEditorStore = defineStore('editor', () => {
     backgroundObjects,
     addBackgroundObject, removeBackgroundObject, updateBackgroundObject,
     addSavedView, removeSavedView,
-    logChange, exportSnapshot, importSnapshot,
+    logChange, exportChangeLog, exportSnapshot, importSnapshot,
   }
 })

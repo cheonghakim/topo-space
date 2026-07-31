@@ -3,10 +3,15 @@
     <div class="panel-head">
       <span>Spaces</span>
       <div class="head-actions">
-        <button v-if="ui.mode === 'edit'" class="text-btn" title="Add space" @click="showAdd = true">
+        <button
+          v-if="ui.mode === 'edit'"
+          class="text-btn"
+          title="Add space"
+          @click="showAdd = true"
+        >
           Add
         </button>
-        <button class="text-btn" @click="ui.showSpaceTree = false">
+        <button class="text-btn" @click="ui.closeLeftDock()" title="Close">
           Close
         </button>
       </div>
@@ -40,19 +45,30 @@
           <span class="arrow-spacer" />
           <span class="kind-tag">GRP</span>
           <span class="node-name">{{ g.name }}</span>
-          <button v-if="ui.mode === 'edit'" class="row-btn del" @click.stop="archiveSpace(g.id)">
+          <button
+            v-if="ui.mode === 'edit'"
+            class="row-btn del"
+            @click.stop="archiveSpace(g.id)"
+          >
             Del
           </button>
         </div>
       </div>
 
-      <div v-if="ui.mode === 'edit'" class="add-child-btn root" @click="showAdd = true">
+      <div
+        v-if="ui.mode === 'edit'"
+        class="add-child-btn root"
+        @click="showAdd = true"
+      >
         + Add building / site / group
       </div>
     </div>
 
     <Transition name="fade">
-      <div v-if="ui.mode === 'edit' && (showAdd || addChildParentId)" class="add-modal">
+      <div
+        v-if="ui.mode === 'edit' && (showAdd || addChildParentId)"
+        class="add-modal"
+      >
         <div class="add-title">Add Space</div>
         <select v-model="newType" class="add-sel">
           <option value="building">Building</option>

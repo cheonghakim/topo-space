@@ -43,12 +43,14 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { useUIStore } from "@/stores/ui";
 import { useEditorStore } from "@/stores/editor";
 import { useWebSocketSim } from "@/composables/useWebSocketSim";
+import { useNmsEditor } from "@/composables/useNmsEditor";
 import { startProductTour } from "@/composables/useProductTour";
 import type { EdgeType } from "@/types";
 
 const ui = useUIStore();
 const editor = useEditorStore();
 const ws = useWebSocketSim();
+const nmsEditor = useNmsEditor();
 
 interface Item {
   label?: string;
@@ -150,11 +152,18 @@ const menus = computed<Menu[]>(() => [
         checked: () => ui.wsConnected,
         action: toggleWs,
       },
-      {
-        label: "Random simulator",
-        checked: () => simActive.value,
-        action: toggleSim,
-      },
+      // Injects fake random alarms — opt-in via features.chaosSimulator so a
+      // production NOC screen can never show alarms that aren't real by
+      // accident (a host must explicitly enable this for demos/QA).
+      ...(editor.hasFeature("chaosSimulator")
+        ? [
+            {
+              label: "Random simulator",
+              checked: () => simActive.value,
+              action: toggleSim,
+            },
+          ]
+        : []),
     ],
   },
   {
@@ -211,6 +220,16 @@ const menus = computed<Menu[]>(() => [
         checked: () => ui.linkToolActive,
         action: () => ui.toggleLinkTool(),
       },
+      {
+        label: "Next alert",
+        shortcut: "]",
+        action: () => nmsEditor.cycleAlarms(1),
+      },
+      {
+        label: "Previous alert",
+        shortcut: "[",
+        action: () => nmsEditor.cycleAlarms(-1),
+      },
       { separator: true },
       {
         label: "Mode: View",
@@ -236,6 +255,12 @@ const menus = computed<Menu[]>(() => [
         action: () => ui.setFontScale(ui.fontScale + 0.05),
       },
       { label: "Reset text size", action: () => ui.setFontScale(1.1) },
+      { separator: true },
+      {
+        label: "Colorblind-safe palette",
+        checked: () => ui.colorblindMode,
+        action: () => nmsEditor.toggleColorblindMode(),
+      },
     ],
   },
   {

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { DeviceStatus, DeviceType, EdgeType } from '@/types'
 
-export const STATUS_COLOR_HEX: Record<DeviceStatus, string> = {
+const _DEFAULT_STATUS_COLOR_HEX: Record<DeviceStatus, string> = {
   normal:       '#22c55e',
   warning:      '#eab308',
   critical:     '#ef4444',
@@ -12,9 +12,44 @@ export const STATUS_COLOR_HEX: Record<DeviceStatus, string> = {
   stale:        '#78716c',
 }
 
+// Okabe–Ito inspired palette — status is told apart mainly by hue in the
+// default set (green/yellow/red), which collapses for red-green colorblind
+// users (~8% of men). This set relies on blue/yellow/vermillion instead,
+// distinguishable under protanopia and deuteranopia.
+const _COLORBLIND_STATUS_COLOR_HEX: Record<DeviceStatus, string> = {
+  normal:       '#0072b2',
+  warning:      '#f0e442',
+  critical:     '#d55e00',
+  offline:      '#374151',
+  unknown:      '#8a8a8a',
+  maintenance:  '#56b4e9',
+  acknowledged: '#009e73',
+  stale:        '#999999',
+}
+
+// Mutable — `applyColorMode` swaps these values in place at runtime so every
+// module that captured a reference to this object (canvas renderers,
+// THREE.Color instances below) sees the new palette without re-importing.
+export const STATUS_COLOR_HEX: Record<DeviceStatus, string> = { ..._DEFAULT_STATUS_COLOR_HEX }
+
 export const STATUS_COLOR_THREE: Record<DeviceStatus, THREE.Color> = Object.fromEntries(
   Object.entries(STATUS_COLOR_HEX).map(([k, v]) => [k, new THREE.Color(v)])
 ) as Record<DeviceStatus, THREE.Color>
+
+let _colorMode: 'default' | 'colorblind' = 'default'
+
+export function getColorMode(): 'default' | 'colorblind' {
+  return _colorMode
+}
+
+export function applyColorMode(mode: 'default' | 'colorblind') {
+  _colorMode = mode
+  const source = mode === 'colorblind' ? _COLORBLIND_STATUS_COLOR_HEX : _DEFAULT_STATUS_COLOR_HEX
+  ;(Object.keys(source) as DeviceStatus[]).forEach((status) => {
+    STATUS_COLOR_HEX[status] = source[status]
+    STATUS_COLOR_THREE[status].set(source[status])
+  })
+}
 
 export const DEVICE_TYPE_COLOR: Record<DeviceType, string> = {
   server:        '#3b82f6',
@@ -80,6 +115,20 @@ export const STATUS_LABEL: Record<DeviceStatus, string> = {
   maintenance:  'Maintenance',
   acknowledged: 'Acknowledged',
   stale:        'Stale',
+}
+
+// Non-color status indicator (colorblind-safe redundancy) shown as a small
+// badge above every non-normal device in the 3D scene — status must never be
+// color-only there, since the instanced mesh color is the *only* other signal.
+export const STATUS_ICON: Record<DeviceStatus, string> = {
+  normal:       '',
+  warning:      '▲',   // ▲
+  critical:     '✕',   // ✕
+  offline:      '⏻',   // ⏻
+  unknown:      '?',
+  maintenance:  '↻',   // ↻
+  acknowledged: '✓',   // ✓
+  stale:        '…',   // …
 }
 
 // ── Custom type registry (populated from useDeviceTypesStore) ─────────────────

@@ -32,6 +32,8 @@
           :camera="currentCamera"
           :controls="currentControls"
         />
+
+        <OffscreenAlertOverlay v-if="ui.viewMode === '3d' && sceneReady" />
       </div>
 
       <!-- Right dock: contextual detail + tool panels, stacked -->
@@ -99,6 +101,7 @@ import TimelinePanel     from '@/components/layout/TimelinePanel.vue'
 import MinimapPanel      from '@/components/layout/MinimapPanel.vue'
 import SceneCanvas       from '@/components/scene/SceneCanvas.vue'
 import OverviewCanvas    from '@/components/scene/OverviewCanvas.vue'
+import OffscreenAlertOverlay from '@/components/scene/OffscreenAlertOverlay.vue'
 import ContextMenu       from '@/components/ui/ContextMenu.vue'
 import ToastPanel        from '@/components/ui/ToastPanel.vue'
 import HelpPanel         from '@/components/ui/HelpPanel.vue'

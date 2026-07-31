@@ -153,6 +153,8 @@ export interface OperatorState {
   maintenanceUntil?: string
   suppressed?: boolean
   memo?: string
+  assignedTo?: string
+  assignedAt?: string
 }
 
 
@@ -200,6 +202,9 @@ export interface FeatureFlags {
   import?: boolean
   tour?: boolean
   backgroundEdit?: boolean
+  // Injects fake random status changes for demos/QA — opt-in only, since a
+  // production NOC screen must never show alarms that aren't real.
+  chaosSimulator?: boolean
 }
 
 export const DEFAULT_FEATURES: Required<FeatureFlags> = {
@@ -217,6 +222,7 @@ export const DEFAULT_FEATURES: Required<FeatureFlags> = {
   import: false,
   tour: true,
   backgroundEdit: true,
+  chaosSimulator: false,
 }
 
 // ─── Permission ──────────────────────────────────────────────────────────────

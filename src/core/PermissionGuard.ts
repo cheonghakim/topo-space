@@ -15,6 +15,10 @@ export class PermissionGuard {
   setFeatures(features: FeatureFlags) { this.features = { ...DEFAULT_FEATURES, ...features } }
   setResolver(resolver: PermissionResolver) { this.resolver = resolver }
 
+  hasFeature(flag: keyof FeatureFlags): boolean {
+    return !!this.features[flag]
+  }
+
   can(action: EditorAction, target?: PermissionContext['target']): boolean {
     if (action === 'rawDevice:update') return false
 
