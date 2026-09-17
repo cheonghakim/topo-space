@@ -17,8 +17,17 @@
     <div class="sv-list">
       <div v-for="view in editor.savedViews" :key="view.id" class="sv-row">
         <div class="sv-info" @click="loadView(view)">
-          <div class="sv-name">{{ view.name }}</div>
-          <div class="sv-time">{{ view.createdAt }}</div>
+          <img
+            v-if="view.thumbnail"
+            :src="view.thumbnail"
+            class="sv-thumb"
+            alt=""
+          />
+          <div v-else class="sv-thumb sv-thumb--empty" aria-hidden="true" />
+          <div class="sv-text">
+            <div class="sv-name">{{ view.name }}</div>
+            <div class="sv-time">{{ view.createdAt }}</div>
+          </div>
         </div>
         <button class="del-btn" @click="editor.removeSavedView(view.id)">
           ✕
@@ -105,7 +114,33 @@ function loadView(view: SavedView) {
 }
 .sv-info {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
+}
+.sv-thumb {
+  width: 48px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  border: 1px solid #23334a;
+  object-fit: cover;
+  background: #050a14;
+}
+.sv-thumb--empty {
+  background: linear-gradient(135deg, #0f172a, #182338);
+}
+.sv-text {
+  min-width: 0;
+  flex: 1;
+}
+.sv-name,
+.sv-time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sv-info:hover .sv-name {
   color: #60a5fa;

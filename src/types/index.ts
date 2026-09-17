@@ -420,6 +420,8 @@ export interface SavedView {
   cameraTarget: Vector3Like;
   filters?: Partial<FilterState>;
   createdAt: string;
+  /** Small data-URL snapshot of the canvas at save time, shown in the saved-view list. */
+  thumbnail?: string;
 }
 
 export interface LinkDraftState {

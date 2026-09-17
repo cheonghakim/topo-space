@@ -5,13 +5,22 @@
 
     <div class="workspace">
       <!-- Left dock: device / space sources -->
-      <aside v-if="hasLeftPanel" class="left-dock">
+      <aside
+        v-if="hasLeftPanel"
+        class="left-dock"
+        :style="{ width: leftDockWidth + 'px' }"
+      >
         <AlertPanel v-if="ui.showAlertPanel" />
         <CustomTypePanel v-else-if="ui.showCustomTypes" />
         <BackgroundPanel v-else-if="ui.showBackgroundPanel" />
         <RackServerListPanel v-else-if="ui.showRackServerList" />
         <SpaceTreePanel v-else-if="ui.showSpaceTree" />
         <UnmappedPanel v-else-if="ui.showUnmapped" />
+        <div
+          class="dock-resizer dock-resizer--left"
+          :class="{ 'dock-resizer--active': resizingSide === 'left' }"
+          @pointerdown="startDockResize('left', $event)"
+        />
       </aside>
 
       <div ref="canvasWrap" class="canvas-wrap">
@@ -34,7 +43,16 @@
       </div>
 
       <!-- Right dock: contextual detail + tool panels, stacked -->
-      <aside v-if="hasRightPanel" class="right-dock">
+      <aside
+        v-if="hasRightPanel"
+        class="right-dock"
+        :style="{ width: rightDockWidth + 'px' }"
+      >
+        <div
+          class="dock-resizer dock-resizer--right"
+          :class="{ 'dock-resizer--active': resizingSide === 'right' }"
+          @pointerdown="startDockResize('right', $event)"
+        />
         <DeviceDetailPanel v-if="ui.selectedDeviceId" />
         <LinkPropertyPanel v-else-if="ui.selectedLinkId" />
         <SpacePropertyPanel v-else-if="ui.selectedSpaceId" />
@@ -66,6 +84,8 @@
     <HelpPanel />
 
     <ImportPanel />
+
+    <ConfirmDialog />
 
     <Transition name="fade">
       <div v-if="ui.blastSourceId" class="blast-banner">
@@ -118,6 +138,7 @@ import ContextMenu from "@/components/ui/ContextMenu.vue";
 import ToastPanel from "@/components/ui/ToastPanel.vue";
 import HelpPanel from "@/components/ui/HelpPanel.vue";
 import ImportPanel from "@/components/ui/ImportPanel.vue";
+import ConfirmDialog from "@/components/ui/ConfirmDialog.vue";
 import ViewSwitcher from "@/components/ui/ViewSwitcher.vue";
 import StatusLegend from "@/components/ui/StatusLegend.vue";
 import { useUIStore } from "@/stores/ui";
@@ -187,6 +208,54 @@ const hasRightPanel = computed(
     ui.showChangeLog ||
     ui.showVirtualNodes,
 );
+
+// ── Resizable docks ─────────────────────────────────────────────────────────
+// Left-dock children (AlertPanel, CustomTypePanel, ...) each hard-code their
+// own width; the dock's bound width + the global ":deep"-free override below
+// (`.left-dock > *`) makes whichever one is currently mounted stretch to fill
+// it instead, so one resize handle works no matter which panel is showing.
+const DOCK_LIMITS = {
+  left: { min: 220, max: 560, default: 280 },
+  right: { min: 260, max: 560, default: 290 },
+} as const;
+
+function loadDockWidth(side: "left" | "right"): number {
+  const { min, max, default: def } = DOCK_LIMITS[side];
+  const v = parseFloat(
+    localStorage.getItem(`topospace.dockWidth.${side}`) ?? "",
+  );
+  return Number.isFinite(v) && v >= min && v <= max ? v : def;
+}
+
+const leftDockWidth = ref(loadDockWidth("left"));
+const rightDockWidth = ref(loadDockWidth("right"));
+const resizingSide = ref<"left" | "right" | null>(null);
+
+function startDockResize(side: "left" | "right", e: PointerEvent) {
+  e.preventDefault();
+  resizingSide.value = side;
+  const startX = e.clientX;
+  const startWidth = side === "left" ? leftDockWidth.value : rightDockWidth.value;
+  const { min, max } = DOCK_LIMITS[side];
+
+  function onMove(ev: PointerEvent) {
+    const delta = side === "left" ? ev.clientX - startX : startX - ev.clientX;
+    const next = Math.min(max, Math.max(min, Math.round(startWidth + delta)));
+    if (side === "left") leftDockWidth.value = next;
+    else rightDockWidth.value = next;
+  }
+  function onUp() {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    resizingSide.value = null;
+    localStorage.setItem(
+      `topospace.dockWidth.${side}`,
+      String(side === "left" ? leftDockWidth.value : rightDockWidth.value),
+    );
+  }
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp, { once: true });
+}
 
 watch(
   () => ui.fontScale,
@@ -261,7 +330,9 @@ watch(
 }
 
 .left-dock {
+  position: relative;
   flex: 0 0 auto;
+  flex-shrink: 0;
   display: flex;
   border-right: 1px solid #1a2a4a;
   background: rgba(8, 12, 24, 0.96);
@@ -269,8 +340,8 @@ watch(
 /* Reserve space for details so they never cover navigation or selected devices. */
 .right-dock {
   position: relative;
-  flex: 0 0 290px;
-  width: 290px;
+  flex: 0 0 auto;
+  flex-shrink: 0;
   max-height: 100%;
   display: flex;
   flex-direction: column;
@@ -282,6 +353,72 @@ watch(
 }
 .right-dock::-webkit-scrollbar {
   width: 3px;
+}
+
+/* Each left-dock panel (AlertPanel, CustomTypePanel, ...) hard-codes its own
+   width so it also works stand-alone; here the dock itself is the resizable
+   unit, so stretch whichever one is mounted to fill it. Vue tags a child
+   component's root node with the parent's scope id too, so this reaches it
+   without :deep() — !important guards against that specificity tie. */
+.left-dock > :first-child {
+  width: 100% !important;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dock-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 60;
+  touch-action: none;
+}
+.dock-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  background: transparent;
+  transition: background-color 0.15s;
+}
+.dock-resizer:hover::after,
+.dock-resizer--active::after {
+  background: #3b82f6;
+}
+.dock-resizer--left {
+  right: -3px;
+}
+.dock-resizer--right {
+  left: -3px;
+}
+
+/* Below tablet width the docks can no longer share the row with a usable 3D
+   viewport (the canvas was being squeezed to a sliver) — float them over the
+   canvas instead so it always keeps the full width underneath. */
+@media (max-width: 900px) {
+  .left-dock,
+  .right-dock {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    max-width: 85vw;
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.5);
+  }
+  .left-dock {
+    left: 0;
+    z-index: 220;
+  }
+  .right-dock {
+    right: 0;
+    z-index: 220;
+  }
+  .dock-resizer {
+    display: none;
+  }
 }
 
 .fade-enter-active,

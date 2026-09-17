@@ -334,6 +334,11 @@ onBeforeUnmount(() => document.removeEventListener("mousedown", onDocClick));
   z-index: 1000;
   font-size: 11px;
   user-select: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.menubar > * {
+  flex-shrink: 0;
 }
 .brand {
   color: #60a5fa;

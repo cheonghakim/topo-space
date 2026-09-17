@@ -13,6 +13,12 @@ import {
   getDeviceGeometry,
   disposeGeometryCache,
 } from "@/utils/geometryFactory";
+import {
+  layoutLabels,
+  measureLabel,
+  type LabelCandidate,
+  type MeasuredLabel,
+} from "@/utils/labelLayout";
 
 const _matCache = new Map<string, THREE.MeshStandardMaterial>();
 
@@ -72,6 +78,8 @@ export class DeviceRenderer {
   private searchLabels = new Map<string, CSS2DObject>();
   private typeLabels = new Map<string, CSS2DObject>();
   private nextTypeLabelUpdate = 0;
+  private nextSearchLabelLayout = 0;
+  private labelSizes = new WeakMap<HTMLElement, MeasuredLabel>();
 
   // Non-color status redundancy — a small icon badge shown above every
   // non-normal device, plus an ack checkmark. Never gated on search/dim state:
@@ -610,7 +618,7 @@ export class DeviceRenderer {
 
   // Keeps the selection ring pinned under the selected device even while it's
   // being dragged; called once per frame from the render loop.
-  tick(camera?: THREE.Camera) {
+  tick(camera?: THREE.Camera, viewport?: { width: number; height: number }) {
     if (this.selectedDeviceId && this.selectionRing?.visible) {
       const pos = this.getDeviceWorldPos(this.selectedDeviceId);
       if (pos) this.selectionRing.position.set(pos.x, 0.03, pos.z);
@@ -633,6 +641,15 @@ export class DeviceRenderer {
       const pos = this.getDeviceWorldPos(id);
       if (pos) label.position.copy(pos).add(new THREE.Vector3(0, 1.7, 0));
     });
+    if (
+      camera &&
+      viewport &&
+      this.searchLabels.size &&
+      performance.now() >= this.nextSearchLabelLayout
+    ) {
+      this.nextSearchLabelLayout = performance.now() + 150;
+      this._layoutSearchLabels(camera, viewport);
+    }
     if (camera && performance.now() >= this.nextTypeLabelUpdate) {
       this.nextTypeLabelUpdate = performance.now() + 150;
       const nearby: { id: string; distance: number; pos: THREE.Vector3 }[] = [];
@@ -677,6 +694,50 @@ export class DeviceRenderer {
         this.typeLabels.delete(id);
       });
     }
+  }
+
+  // Search-match labels are placed directly above every matching device, so
+  // a rack with several matches (a common case — "srv" alone can match
+  // dozens) used to pile them on top of each other into an unreadable mess.
+  // Reuse the same screen-space collision culling the rack/space labels use:
+  // project each to screen space, then hide whichever lower-priority ones
+  // would overlap. Higher-severity devices win the space so an operator
+  // scanning search results never loses a critical hit to a normal one.
+  private _layoutSearchLabels(
+    camera: THREE.Camera,
+    viewport: { width: number; height: number },
+  ) {
+    const candidates: LabelCandidate[] = [];
+    this.searchLabels.forEach((label, id) => {
+      const point = label.getWorldPosition(new THREE.Vector3()).project(camera);
+      if (point.z < -1 || point.z > 1 || !Number.isFinite(point.x + point.y)) {
+        label.visible = false;
+        label.element.style.visibility = "hidden";
+        return;
+      }
+      const measured = measureLabel(label.element, this.labelSizes);
+      const status = this.statusMap.get(id);
+      candidates.push({
+        id,
+        x: ((point.x + 1) * viewport.width) / 2 - measured.width / 2,
+        y: ((1 - point.y) * viewport.height) / 2 - measured.height / 2,
+        width: measured.width,
+        height: measured.height,
+        priority: status ? BADGE_SEVERITY[status] : 0,
+      });
+    });
+    const visible = layoutLabels(candidates, viewport.width, viewport.height);
+    this.searchLabels.forEach((label, id) => {
+      // `visible` (the Object3D flag, not just the DOM style) has to reflect
+      // the culling result too — getLabelObstacles() feeds these labels into
+      // SpaceRenderer's own layout pass, which only treats a label as an
+      // obstacle when `.visible` is true. Leaving it true here would make a
+      // hidden search label keep reserving its screen rect and needlessly
+      // suppress a rack/space name badge that could otherwise show there.
+      const isVisible = visible.has(id);
+      label.visible = isVisible;
+      label.element.style.visibility = isVisible ? "visible" : "hidden";
+    });
   }
 
   getLabelObstacles(): CSS2DObject[] {

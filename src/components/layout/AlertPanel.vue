@@ -34,9 +34,11 @@
     </div>
     <div v-if="!groups.length" class="ap-empty">
       {{
-        severity
-          ? "No " + STATUS_LABEL[severity].toLowerCase() + " alerts"
-          : "No active alerts"
+        searchQuery
+          ? `No alerts match "${ui.filter.search}"`
+          : severity
+            ? "No " + STATUS_LABEL[severity].toLowerCase() + " alerts"
+            : "No active alerts"
       }}
     </div>
     <div v-for="g in groups" :key="g.spaceId" class="ap-group">
@@ -197,13 +199,22 @@ const severityCounts = computed(() => {
     for (const device of group.devices) counts[device.status ?? "offline"]!++;
   return counts;
 });
+// Alerts used to ignore the toolbar's search box entirely — searching for a
+// hostname there had no effect here, even though it's the same global filter
+// state everywhere else in the app.
+const searchQuery = computed(() => ui.filter.search.toLowerCase().trim());
 const groups = computed(() =>
   allGroups.value
     .map((group) => ({
       ...group,
-      devices: group.devices.filter(
-        (device) => !severity.value || device.status === severity.value,
-      ),
+      devices: group.devices.filter((device) => {
+        if (severity.value && device.status !== severity.value) return false;
+        if (!searchQuery.value) return true;
+        return (
+          (device.hostname ?? "").toLowerCase().includes(searchQuery.value) ||
+          (device.ip ?? "").includes(searchQuery.value)
+        );
+      }),
     }))
     .filter((group) => group.devices.length),
 );

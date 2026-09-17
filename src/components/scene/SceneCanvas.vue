@@ -3,6 +3,35 @@
     <canvas ref="canvas" />
     <div ref="overlay" class="html-overlay" />
 
+    <button
+      class="compass"
+      title="Scene orientation — click to face north"
+      @click="faceNorth"
+    >
+      <svg viewBox="0 0 40 40" width="36" height="36" aria-hidden="true">
+        <circle
+          cx="20"
+          cy="20"
+          r="18"
+          fill="rgba(12,22,39,0.85)"
+          stroke="#30445f"
+        />
+        <g :style="{ transform: `rotate(${compassDeg}deg)` }" class="needle">
+          <path d="M20 6 L24.5 21 L20 18 L15.5 21 Z" fill="#ef4444" />
+          <path d="M20 34 L24.5 19 L20 22 L15.5 19 Z" fill="#475569" />
+          <text
+            x="20"
+            y="12.5"
+            text-anchor="middle"
+            class="compass-n"
+            :style="{ transform: `rotate(${-compassDeg}deg)` }"
+          >
+            N
+          </text>
+        </g>
+      </svg>
+    </button>
+
     <nav class="camera-tools" aria-label="Camera controls">
       <span class="camera-caption">NAVIGATE</span>
       <button title="Reset camera (F)" @click="resetCamera">Reset view</button>
@@ -99,22 +128,43 @@
       </div>
     </Transition>
 
-    <div v-if="ui.linkToolActive" class="hint edit-hint">
-      Connect mode — <b>drag</b> from one device to another, then pick a link
-      type · <kbd>ESC</kbd> to cancel
-    </div>
+    <div v-if="ui.showModeHint" class="hint-wrap">
+      <div v-if="ui.linkToolActive" class="hint edit-hint">
+        Connect mode — <b>drag</b> from one device to another, then pick a
+        link type · <kbd>ESC</kbd> to cancel
+      </div>
 
-    <div v-else-if="ui.mode === 'edit'" class="hint">
-      Click to select · <kbd>Ctrl</kbd>+Click multi-select · drag
-      <span style="color: #ff6b7a">X</span>/<span style="color: #5fd968">Y</span
-      >/<span style="color: #5fb0ff">Z</span> arrows to move ·
-      <kbd>L</kbd> Connect · <kbd>Del</kbd> Delete · <kbd>Ctrl+Z</kbd> Undo ·
-      <kbd>F</kbd> Fit
-    </div>
+      <div v-else-if="ui.mode === 'edit'" class="hint">
+        Click to select · <kbd>Ctrl</kbd>+Click multi-select · drag
+        <span style="color: #ff6b7a">X</span>/<span style="color: #5fd968"
+          >Y</span
+        >/<span style="color: #5fb0ff">Z</span> arrows to move ·
+        <kbd>L</kbd> Connect · <kbd>Del</kbd> Delete · <kbd>Ctrl+Z</kbd> Undo ·
+        <kbd>F</kbd> Fit
+      </div>
 
-    <div v-else class="hint">
-      View mode - click to inspect - <kbd>F</kbd> Fit
+      <div v-else class="hint">
+        View mode - click to inspect - <kbd>F</kbd> Fit
+      </div>
+
+      <button
+        class="hint-toggle hint-toggle--close"
+        title="Hide controls hint"
+        aria-label="Hide controls hint"
+        @click="ui.showModeHint = false"
+      >
+        ×
+      </button>
     </div>
+    <button
+      v-else
+      class="hint-toggle hint-toggle--reopen"
+      title="Show controls hint"
+      aria-label="Show controls hint"
+      @click="ui.showModeHint = true"
+    >
+      ?
+    </button>
   </div>
 </template>
 
@@ -138,15 +188,22 @@ const {
   dispose,
   dropDeviceAt,
   resetCamera,
+  faceNorth,
   focusDevice,
   zoomCamera,
   setCameraView,
   getScene,
 } = useNmsEditor();
 const cameraView = ref<"top" | "perspective">("perspective");
+const compassDeg = ref(0);
 function syncCameraView() {
-  cameraView.value =
-    getScene().controls.getPolarAngle() < 0.1 ? "top" : "perspective";
+  const controls = getScene().controls;
+  cameraView.value = controls.getPolarAngle() < 0.1 ? "top" : "perspective";
+  // Rotate the dial opposite the camera's own yaw so "N" always points at
+  // wherever world -Z currently is on screen, the standard map-compass
+  // convention — orbit right, the dial (and the direction it's marking)
+  // visibly turns left under a fixed viewer.
+  compassDeg.value = -(controls.getAzimuthalAngle() * 180) / Math.PI;
 }
 const showNavigationHelp = ref(false);
 function focusSelected() {
@@ -187,6 +244,33 @@ canvas {
   width: 100%;
   height: 100%;
   display: block;
+}
+.compass {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 130;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 50%;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
+}
+.compass:hover circle {
+  stroke: #72b7ed;
+}
+.compass .needle {
+  transform-origin: 20px 20px;
+  transition: transform 0.1s linear;
+}
+.compass-n {
+  fill: #e2e8f0;
+  font-size: 8px;
+  font-weight: 700;
+  transform-origin: 20px 12.5px;
 }
 .camera-tools {
   position: absolute;
@@ -348,25 +432,58 @@ canvas {
   pointer-events: none;
   white-space: nowrap;
 }
-.hint {
+.hint-wrap {
   position: absolute;
   bottom: 14px;
   left: 50%;
   transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+}
+.hint {
   color: #94a3b8;
   font-size: 11px;
   pointer-events: none;
   letter-spacing: 0.02em;
-  white-space: nowrap;
   background: rgba(8, 12, 24, 0.7);
   border: 1px solid #1a2a4a;
-  padding: 8px 14px;
+  padding: 8px 30px 8px 14px;
   border-radius: 12px;
   backdrop-filter: blur(4px);
-  max-width: calc(100% - 32px);
   white-space: normal;
   text-align: center;
   line-height: 1.7;
+}
+.hint-toggle {
+  border: 1px solid #1a2a4a;
+  background: rgba(8, 12, 24, 0.85);
+  color: #64748b;
+  cursor: pointer;
+  font: inherit;
+  border-radius: 50%;
+}
+.hint-toggle:hover {
+  color: #cbd5e1;
+  border-color: #3b82f6;
+}
+.hint-toggle--close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  line-height: 16px;
+  font-size: 13px;
+  padding: 0;
+}
+.hint-toggle--reopen {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+  font-weight: 700;
 }
 .hint b {
   color: #cbd5e1;

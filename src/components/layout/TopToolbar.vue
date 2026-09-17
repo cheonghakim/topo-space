@@ -11,6 +11,13 @@
         >Clear</span
       >
     </div>
+    <span
+      v-if="ui.searchMatchCount !== null"
+      class="match-count"
+      :class="{ 'match-count--zero': ui.searchMatchCount === 0 }"
+    >
+      {{ ui.searchMatchCount }} matched
+    </span>
 
     <select v-model="statusFilter" class="sel">
       <option value="">All status</option>
@@ -148,6 +155,26 @@
       Help
     </button>
   </header>
+
+  <div v-if="activeFilterChips.length" class="active-filters">
+    <span
+      v-for="chip in activeFilterChips"
+      :key="chip.key"
+      class="filter-chip"
+    >
+      {{ chip.label }}
+      <button
+        class="filter-chip-x"
+        :aria-label="`Remove filter: ${chip.label}`"
+        @click="chip.onRemove"
+      >
+        ×
+      </button>
+    </span>
+    <button class="filter-chip-clear" @click="clearAllFilters">
+      Clear all
+    </button>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -155,7 +182,11 @@ import { computed, ref, onMounted, onBeforeUnmount } from "vue";
 import { useEditorStore } from "@/stores/editor";
 import { useUIStore } from "@/stores/ui";
 import { useNmsEditor } from "@/composables/useNmsEditor";
-import { DEVICE_TYPE_LABEL, STATUS_COLOR_HEX } from "@/utils/colorUtils";
+import {
+  DEVICE_TYPE_LABEL,
+  STATUS_COLOR_HEX,
+  STATUS_LABEL,
+} from "@/utils/colorUtils";
 import type { DeviceStatus, DeviceType } from "@/types";
 
 const editor = useEditorStore();
@@ -176,6 +207,57 @@ function toggleType(t: DeviceType) {
     ? ui.filter.type.filter((x) => x !== t)
     : [...ui.filter.type, t];
   ui.setFilter({ type: next });
+}
+
+interface FilterChip {
+  key: string;
+  label: string;
+  onRemove: () => void;
+}
+
+// Each control above already shows its own active state (highlighted button,
+// filled dropdown, checked box) — but that's only visible if you know where
+// to look, and there's no single place that answers "what's filtered right
+// now?" or lets you drop just one constraint without hunting down its source
+// control. This is that place.
+const activeFilterChips = computed<FilterChip[]>(() => {
+  const chips: FilterChip[] = [];
+  if (ui.filter.search) {
+    chips.push({
+      key: "search",
+      label: `Search: "${ui.filter.search}"`,
+      onRemove: () => ui.setFilter({ search: "" }),
+    });
+  }
+  for (const status of ui.filter.status) {
+    chips.push({
+      key: `status-${status}`,
+      label: STATUS_LABEL[status] ?? status,
+      onRemove: () =>
+        ui.setFilter({ status: ui.filter.status.filter((s) => s !== status) }),
+    });
+  }
+  for (const type of ui.filter.type) {
+    chips.push({
+      key: `type-${type}`,
+      label: DEVICE_TYPE_LABEL[type],
+      onRemove: () => toggleType(type),
+    });
+  }
+  if (ui.alertsOnly) {
+    chips.push({
+      key: "alertsOnly",
+      label: "Alerts only",
+      onRemove: () => {
+        ui.alertsOnly = false;
+      },
+    });
+  }
+  return chips;
+});
+
+function clearAllFilters() {
+  ui.resetFilter();
 }
 
 function onDocClick(e: MouseEvent) {
@@ -254,6 +336,13 @@ async function onAutoLayoutClick() {
   gap: 8px;
   flex-shrink: 0;
   z-index: 200;
+  /* Narrow viewports can't fit every filter/mode control on one line — scroll
+     horizontally rather than clipping or wrapping into overlapping rows. */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.toolbar > * {
+  flex-shrink: 0;
 }
 .spacer {
   flex: 1;
@@ -287,6 +376,15 @@ async function onAutoLayoutClick() {
 }
 .clr:hover {
   color: #cbd5e1;
+}
+.match-count {
+  font-size: 10px;
+  color: #7dd3fc;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.match-count--zero {
+  color: #64748b;
 }
 .sel {
   background: #0f172a;
@@ -437,5 +535,51 @@ async function onAutoLayoutClick() {
 .mode-btn.active {
   background: #1e3a5f;
   color: #93c5fd;
+}
+.active-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(8, 12, 24, 0.9);
+  border-bottom: 1px solid #1a2a4a;
+  font-size: 11px;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #16233a;
+  border: 1px solid #2a4a8a;
+  color: #93c5fd;
+  border-radius: 12px;
+  padding: 2px 4px 2px 10px;
+  white-space: nowrap;
+}
+.filter-chip-x {
+  background: none;
+  border: none;
+  color: #7dd3fc;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 50%;
+}
+.filter-chip-x:hover {
+  background: rgba(125, 211, 252, 0.15);
+}
+.filter-chip-clear {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 2px 4px;
+}
+.filter-chip-clear:hover {
+  color: #cbd5e1;
 }
 </style>

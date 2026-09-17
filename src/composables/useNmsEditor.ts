@@ -697,6 +697,21 @@ function createNmsEditorRuntime(
     return ray.ray.intersectPlane(plane, pt) ? pt : null;
   }
 
+  // Freehand device/space placement used to land on whatever fractional
+  // coordinate the raycast happened to hit, so two racks meant to line up
+  // rarely actually shared an X or Z — nudging them straight required
+  // zooming in and eyeballing it. Snapping to a coarse world-unit grid during
+  // every drag (gizmo or free-drag alike) makes "line them up" the default
+  // outcome instead of a manual fix-up step. Y is left alone: height is set
+  // by the vertical gizmo axis specifically, and grid-snapping it too would
+  // fight rack-unit-based device stacking.
+  const GRID_SNAP = 0.5;
+  function _snapXZ(pos: THREE.Vector3): THREE.Vector3 {
+    pos.x = Math.round(pos.x / GRID_SNAP) * GRID_SNAP;
+    pos.z = Math.round(pos.z / GRID_SNAP) * GRID_SNAP;
+    return pos;
+  }
+
   function attachGizmoToSelection(sel: { type: string; id: string }) {
     if (!gizmo) return;
     if (ui.mode !== "edit") {
@@ -732,6 +747,7 @@ function createNmsEditorRuntime(
       !!q || f.status.length > 0 || f.type.length > 0 || ui.alertsOnly;
     if (!hasFilter) {
       device.applySearchFilter(new Set(), false);
+      ui.searchMatchCount = null;
       return;
     }
     const matchingIds = new Set<string>();
@@ -753,6 +769,7 @@ function createNmsEditorRuntime(
       const dev = editor.devices.get(id);
       return dev?.hostname ?? dev?.ip ?? id;
     });
+    ui.searchMatchCount = matchingIds.size;
   }
 
   function _startLoop() {
@@ -763,7 +780,7 @@ function createNmsEditorRuntime(
       vnode.update(elapsed);
       flash.update(delta);
       gizmo.update(scene.camera);
-      device.tick(scene.camera);
+      device.tick(scene.camera, scene.getSize());
       space.updateLod(
         scene.camera,
         scene.controls.target,
@@ -1064,9 +1081,13 @@ function createNmsEditorRuntime(
         if (_gizmoAxis === "z" || _gizmoAxis === "xz") newPos.z += delta.z;
         if (_gizmoAxis === "y")
           newPos.y = Math.max(0, _gizmoStartPos.y + delta.y);
-        gizmo.setPosition(newPos);
 
         const t = gizmo.currentTarget;
+        // Background objects (floor plans, building models) are free-form
+        // scale/placement, not grid-mounted like racks/devices — leave them off it.
+        if (_gizmoAxis !== "y" && t?.type !== "background") _snapXZ(newPos);
+        gizmo.setPosition(newPos);
+
         if (t?.type === "device") {
           device.setPosition(t.id, newPos);
           link.refreshPositionsFor([t.id], (id) =>
@@ -1100,9 +1121,9 @@ function createNmsEditorRuntime(
       if (newPos && dragMove.isDragging) {
         const target = dragMove.currentTarget;
         if (target.type === "device") {
-          device.setPosition(target.id!, newPos);
+          device.setPosition(target.id!, _snapXZ(newPos));
         } else if (target.type === "space") {
-          space.setPosition(target.id!, newPos);
+          space.setPosition(target.id!, _snapXZ(newPos));
         } else if (target.type === "linkHandle") {
           link.updateMidpoint(target.id!, newPos.x, newPos.z);
           _syncParticles();
@@ -1227,6 +1248,7 @@ function createNmsEditorRuntime(
       const result = dragMove.onMouseUp(e, _canvas, scene.camera);
       if (result) {
         const { targetId, targetType, newPos } = result;
+        if (targetType !== "linkHandle") _snapXZ(newPos);
         // linkHandle undo was saved on pointerdown; device/space save here (after drag)
         if (targetType !== "linkHandle") _saveUndo();
         if (targetType === "device") {
@@ -1285,6 +1307,16 @@ function createNmsEditorRuntime(
       ui.multiSelectedDeviceIds.clear();
       device.setMultiHighlight([]);
       ui.select({ type: "space", id: hit.spaceId });
+      // Clicking a rack directly in the 3D view used to only select it — the
+      // camera stayed put, unlike the same rack clicked from the Alerts
+      // panel (which already flies via focusSpace). Racks are small/dense
+      // enough that flying in is what an operator almost always wants next;
+      // zones/floors/sites are big enough that an unrequested fly-to would
+      // just be disorienting, so this stays scoped to racks. Edit mode skips
+      // it too — the camera needs to hold still while a gizmo attaches.
+      if (ui.mode === "view" && editor.spaces.get(hit.spaceId)?.type === "rack") {
+        focusSpace(hit.spaceId);
+      }
     } else if (hit.linkId) {
       ui.multiSelectedDeviceIds.clear();
       device.setMultiHighlight([]);
@@ -1328,18 +1360,27 @@ function createNmsEditorRuntime(
       !isInputFocused()
     ) {
       e.preventDefault();
-      // Multi-select bulk delete
+      // Multi-select bulk delete — confirmed first. A single stray Del with
+      // several devices still multi-selected from an earlier Ctrl+Click is
+      // easy to not notice immediately, and undoing it means recognizing
+      // that it happened; a one-off single delete stays instant (Ctrl+Z
+      // right there is enough for that case).
       if (ui.multiSelectedDeviceIds.size > 1) {
-        _saveUndo();
         const ids = [...ui.multiSelectedDeviceIds];
-        ids.forEach((id) => {
-          editor.unmapDevice(id);
-        });
-        editor.logChange("device.unmap", `${ids.length} devices removed`);
-        ui.addToast(`${ids.length} devices removed`, "info");
-        ui.multiSelectedDeviceIds.clear();
-        device.setMultiHighlight([]);
-        ui.select(null);
+        ui.requestConfirm(
+          `Delete ${ids.length} selected devices? This also removes their links.`,
+          () => {
+            _saveUndo();
+            ids.forEach((id) => {
+              editor.unmapDevice(id);
+            });
+            editor.logChange("device.unmap", `${ids.length} devices removed`);
+            ui.addToast(`${ids.length} devices removed`, "info");
+            ui.multiSelectedDeviceIds.clear();
+            device.setMultiHighlight([]);
+            ui.select(null);
+          },
+        );
         return;
       }
       const sel = ui.selection;
@@ -1564,6 +1605,20 @@ function createNmsEditorRuntime(
     useUIStore().hideContextMenu();
   }
 
+  // Re-renders on demand and reads the canvas immediately (rather than
+  // relying on the next render-loop frame) so the pixels are still in the
+  // drawing buffer — the renderer isn't created with
+  // preserveDrawingBuffer:true, so a toDataURL() any later than this would
+  // often come back blank.
+  function _captureThumbnail(): string | undefined {
+    try {
+      scene.renderer.render(scene.scene, scene.camera);
+      return scene.renderer.domElement.toDataURL("image/jpeg", 0.5);
+    } catch {
+      return undefined;
+    }
+  }
+
   function saveCurrentView(name: string) {
     const view: SavedView = {
       id: `view-${Date.now()}`,
@@ -1579,6 +1634,7 @@ function createNmsEditorRuntime(
         z: scene.controls.target.z,
       },
       createdAt: new Date().toLocaleString(),
+      thumbnail: _captureThumbnail(),
     };
     editor.addSavedView(view);
     ui.addToast(`View saved: ${name}`, "success");
@@ -1608,6 +1664,24 @@ function createNmsEditorRuntime(
   // the shortcut or who've lost their bearings in the 3D scene.
   function resetCamera() {
     camera.flyToOverview();
+  }
+
+  // Orbiting to inspect a rack from a few angles is normal, but there's no
+  // way back to a known, level orientation short of Reset view — which also
+  // re-fits the whole scope and loses whatever you'd zoomed into. This keeps
+  // distance and elevation, only resetting the horizontal spin, matching
+  // OrbitControls' own spherical-coordinate convention (radius, polar around
+  // the vertical axis, azimuthal around it too) so the motion reads as a
+  // pure rotation rather than a reposition.
+  function faceNorth() {
+    const controls = scene.controls;
+    const offset = scene.camera.position.clone().sub(controls.target);
+    const spherical = new THREE.Spherical().setFromVector3(offset);
+    spherical.theta = 0;
+    const newPos = controls.target
+      .clone()
+      .add(new THREE.Vector3().setFromSpherical(spherical));
+    camera.flyTo(newPos, controls.target.clone());
   }
 
   function zoomCamera(factor: number) {
@@ -1833,6 +1907,7 @@ function createNmsEditorRuntime(
     focusSpace,
     focusVirtualNode,
     resetCamera,
+    faceNorth,
     zoomCamera,
     setCameraView,
     flyToWorldPoint,

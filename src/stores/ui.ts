@@ -250,6 +250,38 @@ export const useUIStore = defineStore("ui", () => {
 
   function resetFilter() {
     filter.value = { ...DEFAULT_FILTER };
+    alertsOnly.value = false;
+  }
+
+  // Reflects the 3D search/status/type/alerts-only match set (kept in sync by
+  // the render loop's applySearchFilter) so the toolbar can show "N matched"
+  // without re-deriving the same predicate a second time. `null` means no
+  // filter is active at all — distinct from "0 matched".
+  const searchMatchCount = ref<number | null>(null);
+
+  // Bottom hint bar (View/Edit mode controls reminder) is shown by default;
+  // dismissing it just hides the bar, it doesn't turn off the feature.
+  const showModeHint = ref(true);
+
+  // A single generic yes/no confirmation, used sparingly — right now only
+  // for bulk delete, where an accidental multi-select + Del is expensive to
+  // notice and undo is a single step (Ctrl+Z), unlike a one-off delete.
+  const confirmDialog = ref<{
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
+  function requestConfirm(
+    message: string,
+    onConfirm: () => void,
+    confirmLabel = "Delete",
+  ) {
+    confirmDialog.value = { message, confirmLabel, onConfirm };
+  }
+  function resolveConfirm(confirmed: boolean) {
+    const dialog = confirmDialog.value;
+    confirmDialog.value = null;
+    if (confirmed) dialog?.onConfirm();
   }
 
   function showTooltipAt(x: number, y: number, deviceId: string) {
@@ -270,6 +302,11 @@ export const useUIStore = defineStore("ui", () => {
     visibleLinkTypes,
     filter,
     alertsOnly,
+    searchMatchCount,
+    showModeHint,
+    confirmDialog,
+    requestConfirm,
+    resolveConfirm,
     contextMenu,
     showUnmapped,
     showSpaceTree,

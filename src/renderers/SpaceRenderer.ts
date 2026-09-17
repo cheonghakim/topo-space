@@ -3,8 +3,10 @@ import { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import type { Space } from "@/types";
 import {
   layoutLabels,
+  measureLabel,
   type LabelCandidate,
   type LabelRect,
+  type MeasuredLabel,
 } from "@/utils/labelLayout";
 
 const SPACE_COLORS: Record<string, { floor: number; edge: number }> = {
@@ -31,10 +33,7 @@ export class SpaceRenderer {
   private scene: THREE.Scene;
   private objects = new Map<string, SpaceObj>();
   private selectedIds = new Set<string>();
-  private labelSizes = new WeakMap<
-    HTMLElement,
-    { text: string | null; width: number; height: number }
-  >();
+  private labelSizes = new WeakMap<HTMLElement, MeasuredLabel>();
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -294,19 +293,7 @@ export class SpaceRenderer {
       if (point.z < -1 || point.z > 1 || !Number.isFinite(point.x + point.y))
         return null;
       // offsetWidth still measures visibility:hidden elements, unlike display:none.
-      const element = label.element;
-      let measured = this.labelSizes.get(element);
-      if (!measured || measured.text !== element.textContent) {
-        const width = element.offsetWidth,
-          height = element.offsetHeight;
-        measured = {
-          text: element.textContent,
-          width: width || (element.textContent?.length ?? 0) * 6.5 + 16,
-          height: height || 20,
-        };
-        if (width && height) this.labelSizes.set(element, measured);
-      }
-      const { width, height } = measured;
+      const { width, height } = measureLabel(label.element, this.labelSizes);
       return {
         x: ((point.x + 1) * viewport.width) / 2 - width / 2,
         y: ((1 - point.y) * viewport.height) / 2 - height / 2,

@@ -9,6 +9,35 @@ export interface LabelCandidate extends LabelRect {
   priority: number;
 }
 
+export interface MeasuredLabel {
+  text: string | null;
+  width: number;
+  height: number;
+}
+
+// A hidden/not-yet-laid-out CSS2DObject element still reports its real
+// offsetWidth/offsetHeight (unlike display:none), but a brand-new one hasn't
+// been laid out by the browser yet — the length-based estimate covers that
+// first frame so a label isn't treated as zero-size before it can collide
+// with anything. Cached per-element so repeat calls (every frame, for every
+// on-screen label) don't force a synchronous layout read each time.
+export function measureLabel(
+  element: HTMLElement,
+  cache: WeakMap<HTMLElement, MeasuredLabel>,
+): MeasuredLabel {
+  const cached = cache.get(element);
+  if (cached && cached.text === element.textContent) return cached;
+  const width = element.offsetWidth;
+  const height = element.offsetHeight;
+  const measured: MeasuredLabel = {
+    text: element.textContent,
+    width: width || (element.textContent?.length ?? 0) * 6.5 + 16,
+    height: height || 20,
+  };
+  if (width && height) cache.set(element, measured);
+  return measured;
+}
+
 /** Deterministic screen-space culling. A grid keeps dense scenes near O(n). */
 export function layoutLabels(
   candidates: LabelCandidate[],
