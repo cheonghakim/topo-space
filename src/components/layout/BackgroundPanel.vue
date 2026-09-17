@@ -2,7 +2,7 @@
   <aside class="bg-panel">
     <div class="bg-head">
       <span class="bg-title">Background</span>
-      <button class="bg-close" @click="ui.closeLeftDock()" title="Close">
+      <button class="bg-close" title="Close" @click="ui.closeLeftDock()">
         ✕
       </button>
     </div>
@@ -62,9 +62,9 @@
           <label class="bg-label"
             >X
             <input
+              v-model.number="posX"
               type="number"
               step="0.5"
-              v-model.number="posX"
               class="bg-input"
               @change="commitPosition"
             />
@@ -72,9 +72,9 @@
           <label class="bg-label"
             >Y
             <input
+              v-model.number="posY"
               type="number"
               step="0.1"
-              v-model.number="posY"
               class="bg-input"
               @change="commitPosition"
             />
@@ -82,9 +82,9 @@
           <label class="bg-label"
             >Z
             <input
+              v-model.number="posZ"
               type="number"
               step="0.5"
-              v-model.number="posZ"
               class="bg-input"
               @change="commitPosition"
             />
@@ -94,9 +94,9 @@
         <label class="bg-label"
           >Rotation Y (°)
           <input
+            v-model.number="rotationY"
             type="number"
             step="5"
-            v-model.number="rotationY"
             class="bg-input"
             @change="commitField('rotationY', rotationY)"
           />
@@ -106,10 +106,10 @@
           <label class="bg-label"
             >Scale
             <input
+              v-model.number="scale"
               type="number"
               step="0.1"
               min="0.01"
-              v-model.number="scale"
               class="bg-input"
               @change="commitField('scale', scale)"
             />
@@ -120,10 +120,10 @@
             <label class="bg-label"
               >Width
               <input
+                v-model.number="imgWidth"
                 type="number"
                 step="0.5"
                 min="0.1"
-                v-model.number="imgWidth"
                 class="bg-input"
                 @change="commitField('width', imgWidth)"
               />
@@ -131,10 +131,10 @@
             <label class="bg-label"
               >Depth
               <input
+                v-model.number="imgDepth"
                 type="number"
                 step="0.5"
                 min="0.1"
-                v-model.number="imgDepth"
                 class="bg-input"
                 @change="commitField('depth', imgDepth)"
               />
@@ -146,11 +146,11 @@
           >Opacity (dashboard view)
           <span class="bg-val">{{ opacity.toFixed(2) }}</span>
           <input
+            v-model.number="opacity"
             type="range"
             min="0.05"
             max="0.9"
             step="0.05"
-            v-model.number="opacity"
             class="bg-slider"
             @change="commitField('opacity', opacity)"
           />

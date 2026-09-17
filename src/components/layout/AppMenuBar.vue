@@ -33,7 +33,9 @@
     </div>
 
     <div class="spacer" />
-    <span class="status-pill" :class="connectionStatusClass">{{ connectionStatusLabel }}</span>
+    <span class="status-pill" :class="connectionStatusClass">{{
+      connectionStatusLabel
+    }}</span>
   </div>
 </template>
 
@@ -73,9 +75,12 @@ const connectionStatusClass = computed(() => ({
 }));
 const connectionStatusLabel = computed(() => {
   switch (ui.connectionStatus) {
-    case "connected": return "Live";
-    case "reconnecting": return "Reconnecting…";
-    default: return "Offline";
+    case "connected":
+      return "Live";
+    case "reconnecting":
+      return "Reconnecting…";
+    default:
+      return "Offline";
   }
 });
 

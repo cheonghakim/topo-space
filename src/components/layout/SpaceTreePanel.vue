@@ -11,7 +11,7 @@
         >
           Add
         </button>
-        <button class="text-btn" @click="ui.closeLeftDock()" title="Close">
+        <button class="text-btn" title="Close" @click="ui.closeLeftDock()">
           Close
         </button>
       </div>

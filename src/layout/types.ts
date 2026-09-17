@@ -4,43 +4,46 @@
 // useNmsEditor's `autoLayout`).
 
 export interface LayoutNode {
-  id: string
-  x: number
-  z: number
+  id: string;
+  x: number;
+  z: number;
   /** Pinned nodes (already manually placed) exert force but never move. */
-  pinned: boolean
+  pinned: boolean;
   /** Devices sharing a clusterId (e.g. the same rack/space) attract more strongly. */
-  clusterId?: string
+  clusterId?: string;
 }
 
 export interface LayoutEdge {
-  sourceId: string
-  targetId: string
+  sourceId: string;
+  targetId: string;
   /** Relative spring strength — higher pulls the pair closer. Defaults to 1. */
-  weight: number
+  weight: number;
 }
 
 export interface LayoutParams {
-  iterations: number
+  iterations: number;
   /** Target rest length for an edge with weight 1. */
-  idealDistance?: number
+  idealDistance?: number;
   /** Multiplier applied to the attraction between same-cluster nodes. */
-  clusterStrength?: number
+  clusterStrength?: number;
   /** Soft radius pulling the whole graph back toward the origin. */
-  bounds?: number
+  bounds?: number;
 }
 
-export interface LayoutPosition { x: number; z: number }
+export interface LayoutPosition {
+  x: number;
+  z: number;
+}
 
 export interface LayoutProgress {
-  iteration: number
-  iterations: number
-  positions: Map<string, LayoutPosition>
+  iteration: number;
+  iterations: number;
+  positions: Map<string, LayoutPosition>;
 }
 
 export interface LayoutRun {
-  promise: Promise<Map<string, LayoutPosition>>
-  cancel: () => void
+  promise: Promise<Map<string, LayoutPosition>>;
+  cancel: () => void;
 }
 
 export interface LayoutEngine {
@@ -49,5 +52,5 @@ export interface LayoutEngine {
     edges: LayoutEdge[],
     params: LayoutParams,
     onProgress?: (progress: LayoutProgress) => void,
-  ): LayoutRun
+  ): LayoutRun;
 }

@@ -6,8 +6,6 @@ import type {
   EditorMode,
   FilterState,
   EdgeType,
-  DeviceStatus,
-  DeviceType,
   Toast,
   ConnectionStatus,
 } from "@/types";
@@ -129,9 +127,13 @@ export const useUIStore = defineStore("ui", () => {
     if (idx >= 0) toasts.value.splice(idx, 1);
   }
 
-  function setConnectionStatus(status: ConnectionStatus, detail?: { message?: string }) {
+  function setConnectionStatus(
+    status: ConnectionStatus,
+    detail?: { message?: string },
+  ) {
     connectionStatus.value = status;
-    if (detail?.message) addToast(detail.message, status === "disconnected" ? "warning" : "info");
+    if (detail?.message)
+      addToast(detail.message, status === "disconnected" ? "warning" : "info");
   }
 
   // ── Tooltip ───────────────────────────────────────────────────────────────

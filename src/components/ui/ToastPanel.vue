@@ -17,8 +17,8 @@
 </template>
 
 <script setup lang="ts">
-import { useUIStore } from '@/stores/ui'
-const ui = useUIStore()
+import { useUIStore } from "@/stores/ui";
+const ui = useUIStore();
 </script>
 
 <style scoped>
@@ -43,24 +43,57 @@ const ui = useUIStore()
   color: #cbd5e1;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 200px;
   transition: transform 0.15s ease;
 }
-.toast:hover { transform: translateX(-2px); }
-.msg   { flex: 1; }
-.close { color: #475569; font-size: 10px; }
+.toast:hover {
+  transform: translateX(-2px);
+}
+.msg {
+  flex: 1;
+}
+.close {
+  color: #475569;
+  font-size: 10px;
+}
 
-.toast.critical { border-left-color: #ef4444; color: #fca5a5; background: rgba(69, 10, 10, 0.85); }
-.toast.warning  { border-left-color: #eab308; color: #fcd34d; background: rgba(66, 32, 6, 0.85); }
-.toast.success  { border-left-color: #22c55e; color: #86efac; background: rgba(5, 46, 22, 0.85); }
-.toast.info     { border-left-color: #3b82f6; color: #93c5fd; }
+.toast.critical {
+  border-left-color: #ef4444;
+  color: #fca5a5;
+  background: rgba(69, 10, 10, 0.85);
+}
+.toast.warning {
+  border-left-color: #eab308;
+  color: #fcd34d;
+  background: rgba(66, 32, 6, 0.85);
+}
+.toast.success {
+  border-left-color: #22c55e;
+  color: #86efac;
+  background: rgba(5, 46, 22, 0.85);
+}
+.toast.info {
+  border-left-color: #3b82f6;
+  color: #93c5fd;
+}
 
-.toast-enter-active, .toast-leave-active { transition: all 0.25s ease; }
-.toast-enter-from { opacity: 0; transform: translateX(40px); }
-.toast-leave-to   { opacity: 0; transform: translateX(40px); }
-.toast-leave-active { position: absolute; }
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.25s ease;
+}
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(40px);
+}
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(40px);
+}
+.toast-leave-active {
+  position: absolute;
+}
 </style>

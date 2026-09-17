@@ -1,4 +1,5 @@
 <!-- keywords: network topology editor, vue3 threejs 3d visualization, NMS UI component, topology viewer, network diagram, infrastructure map, vue network map, 네트워크 토폴로지 에디터, 네트워크 맵 뷰어, 3D 네트워크 다이어그램 -->
+
 # Topospace
 
 3D network topology editor built on Vue 3 + Three.js. Drop it into any Vue app with a single function call — `createNmsEditor` mounts the full scene, panels, and toolbar into whatever container you hand it.
@@ -207,15 +208,15 @@ Force-directed placement for devices that don't have a manual position yet. Devi
 
 ```ts
 await editor.autoLayout({
-  deviceIds:     ['dev-1', 'dev-2'],  // defaults to every known device
-  includeMapped: false,               // re-lay-out already-positioned devices too
-  iterations:    200,
-  onProgress:    (fraction) => console.log(fraction),
-})
+  deviceIds: ["dev-1", "dev-2"], // defaults to every known device
+  includeMapped: false, // re-lay-out already-positioned devices too
+  iterations: 200,
+  onProgress: (fraction) => console.log(fraction),
+});
 
 // Stop an in-flight run early — devices keep whatever position they'd
 // reached so far.
-editor.cancelAutoLayout()
+editor.cancelAutoLayout();
 ```
 
 ### Backend push methods
@@ -263,37 +264,49 @@ topospace has no collector, alerting engine, database, or auth server of its own
 ```ts
 async function poll() {
   try {
-    const res = await fetch('/api/topology', { headers: { Authorization: `Bearer ${token}` } })
-    const { devices, links } = await res.json()
-    editor.upsertDevices(devices)
-    editor.upsertLinks(links)
-    editor.setConnectionStatus('connected')
+    const res = await fetch("/api/topology", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const { devices, links } = await res.json();
+    editor.upsertDevices(devices);
+    editor.upsertLinks(links);
+    editor.setConnectionStatus("connected");
   } catch (err) {
-    editor.setConnectionStatus('disconnected', { message: 'Failed to reach backend' })
+    editor.setConnectionStatus("disconnected", {
+      message: "Failed to reach backend",
+    });
   }
 }
-setInterval(poll, 10_000)
-poll()
+setInterval(poll, 10_000);
+poll();
 ```
 
 **WebSocket push**
 
 ```ts
-const ws = new WebSocket('wss://your-backend/topology')
+const ws = new WebSocket("wss://your-backend/topology");
 
-ws.onopen = () => editor.setConnectionStatus('connected')
-ws.onclose = () => editor.setConnectionStatus('reconnecting')
-ws.onerror = () => editor.setConnectionStatus('reconnecting')
+ws.onopen = () => editor.setConnectionStatus("connected");
+ws.onclose = () => editor.setConnectionStatus("reconnecting");
+ws.onerror = () => editor.setConnectionStatus("reconnecting");
 
 ws.onmessage = (msg) => {
-  const event = JSON.parse(msg.data)
+  const event = JSON.parse(msg.data);
   switch (event.type) {
-    case 'device.upsert':   editor.upsertDevices(event.devices); break
-    case 'link.upsert':     editor.upsertLinks(event.links); break
-    case 'device.ack':      editor.setOperatorState(event.deviceId, { acknowledged: true }); break
-    case 'alarm':           editor.notify(event.message, event.severity); break
+    case "device.upsert":
+      editor.upsertDevices(event.devices);
+      break;
+    case "link.upsert":
+      editor.upsertLinks(event.links);
+      break;
+    case "device.ack":
+      editor.setOperatorState(event.deviceId, { acknowledged: true });
+      break;
+    case "alarm":
+      editor.notify(event.message, event.severity);
+      break;
   }
-}
+};
 ```
 
 Your backend decides the message shape (`event.type` above is just an example) — topospace doesn't mandate a wire format, only the methods you call once you've parsed it.
@@ -662,14 +675,14 @@ editor.destroy()
 
 ```ts
 await editor.autoLayout({
-  deviceIds:     ['dev-1', 'dev-2'],  // 생략하면 전체 장비 대상
-  includeMapped: false,               // true면 이미 배치된 장비도 다시 배치
-  iterations:    200,
-  onProgress:    (fraction) => console.log(fraction),
-})
+  deviceIds: ["dev-1", "dev-2"], // 생략하면 전체 장비 대상
+  includeMapped: false, // true면 이미 배치된 장비도 다시 배치
+  iterations: 200,
+  onProgress: (fraction) => console.log(fraction),
+});
 
 // 진행 중인 배치를 중간에 멈춤 — 그때까지 계산된 위치는 그대로 유지됨
-editor.cancelAutoLayout()
+editor.cancelAutoLayout();
 ```
 
 ### 백엔드 push 메서드
@@ -717,37 +730,47 @@ topospace는 자체 수집기, 알림 엔진, DB, 인증 서버가 없어요 —
 ```ts
 async function poll() {
   try {
-    const res = await fetch('/api/topology', { headers: { Authorization: `Bearer ${token}` } })
-    const { devices, links } = await res.json()
-    editor.upsertDevices(devices)
-    editor.upsertLinks(links)
-    editor.setConnectionStatus('connected')
+    const res = await fetch("/api/topology", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const { devices, links } = await res.json();
+    editor.upsertDevices(devices);
+    editor.upsertLinks(links);
+    editor.setConnectionStatus("connected");
   } catch (err) {
-    editor.setConnectionStatus('disconnected', { message: '백엔드 연결 실패' })
+    editor.setConnectionStatus("disconnected", { message: "백엔드 연결 실패" });
   }
 }
-setInterval(poll, 10_000)
-poll()
+setInterval(poll, 10_000);
+poll();
 ```
 
 **WebSocket push**
 
 ```ts
-const ws = new WebSocket('wss://your-backend/topology')
+const ws = new WebSocket("wss://your-backend/topology");
 
-ws.onopen = () => editor.setConnectionStatus('connected')
-ws.onclose = () => editor.setConnectionStatus('reconnecting')
-ws.onerror = () => editor.setConnectionStatus('reconnecting')
+ws.onopen = () => editor.setConnectionStatus("connected");
+ws.onclose = () => editor.setConnectionStatus("reconnecting");
+ws.onerror = () => editor.setConnectionStatus("reconnecting");
 
 ws.onmessage = (msg) => {
-  const event = JSON.parse(msg.data)
+  const event = JSON.parse(msg.data);
   switch (event.type) {
-    case 'device.upsert':   editor.upsertDevices(event.devices); break
-    case 'link.upsert':     editor.upsertLinks(event.links); break
-    case 'device.ack':      editor.setOperatorState(event.deviceId, { acknowledged: true }); break
-    case 'alarm':           editor.notify(event.message, event.severity); break
+    case "device.upsert":
+      editor.upsertDevices(event.devices);
+      break;
+    case "link.upsert":
+      editor.upsertLinks(event.links);
+      break;
+    case "device.ack":
+      editor.setOperatorState(event.deviceId, { acknowledged: true });
+      break;
+    case "alarm":
+      editor.notify(event.message, event.severity);
+      break;
   }
-}
+};
 ```
 
 메시지 형식(`event.type`)은 예시일 뿐이고 백엔드가 원하는 대로 정하면 돼요 — topospace는 wire format을 강제하지 않고, 파싱한 다음 호출할 메서드만 정해져 있어요.

@@ -2,7 +2,7 @@
   <aside class="ct-panel">
     <div class="ct-head">
       <span class="ct-title">Device Types</span>
-      <button class="ct-close" @click="ui.closeLeftDock()" title="Close">
+      <button class="ct-close" title="Close" @click="ui.closeLeftDock()">
         ✕
       </button>
     </div>
@@ -93,8 +93,8 @@
             <input
               v-model="form.label"
               class="ct-input"
-              @input="autoAbbr"
               placeholder="Core Router"
+              @input="autoAbbr"
             />
           </label>
           <label class="ct-label"
@@ -126,7 +126,7 @@
           Shape
           <div class="ct-radios">
             <label v-for="s in SHAPES" :key="s" class="ct-radio">
-              <input type="radio" :value="s" v-model="form.shape" />
+              <input v-model="form.shape" type="radio" :value="s" />
               {{ s }}
             </label>
           </div>
@@ -135,33 +135,33 @@
         <label class="ct-label"
           >Width <span class="ct-val">{{ form.w.toFixed(1) }}</span>
           <input
+            v-model.number="form.w"
             type="range"
             min="0.3"
             max="2.0"
             step="0.1"
-            v-model.number="form.w"
             class="ct-slider"
           />
         </label>
         <label class="ct-label"
           >Height <span class="ct-val">{{ form.h.toFixed(2) }}</span>
           <input
+            v-model.number="form.h"
             type="range"
             min="0.05"
             max="2.0"
             step="0.05"
-            v-model.number="form.h"
             class="ct-slider"
           />
         </label>
         <label v-if="form.shape === 'box'" class="ct-label"
           >Depth <span class="ct-val">{{ form.d.toFixed(1) }}</span>
           <input
+            v-model.number="form.d"
             type="range"
             min="0.3"
             max="2.0"
             step="0.1"
-            v-model.number="form.d"
             class="ct-slider"
           />
         </label>

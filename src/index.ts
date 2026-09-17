@@ -1,118 +1,122 @@
-import { createApp, type App as VueApp } from 'vue'
-import { createPinia, type Pinia } from 'pinia'
-import App from './App.vue'
-import './style.css'
-import { configureNmsEditor, NMS_EDITOR_OPTIONS_KEY } from '@/composables/useNmsEditor'
-import { useEditorStore } from '@/stores/editor'
-import { useUIStore } from '@/stores/ui'
-import type { EditorOptions } from '@/types'
-import type { NmsEditor } from './public-api'
+import { createApp, type App as VueApp } from "vue";
+import { createPinia, type Pinia } from "pinia";
+import App from "./App.vue";
+import "./style.css";
+import {
+  configureNmsEditor,
+  NMS_EDITOR_OPTIONS_KEY,
+} from "@/composables/useNmsEditor";
+import { useEditorStore } from "@/stores/editor";
+import { useUIStore } from "@/stores/ui";
+import type { EditorOptions } from "@/types";
+import type { NmsEditor } from "./public-api";
 
-export type * from '@/types'
-export type { NmsEditor } from './public-api'
+export type * from "@/types";
+export type { NmsEditor } from "./public-api";
 
 export function createNmsEditor(options: EditorOptions): NmsEditor {
   if (!options.container) {
-    throw new Error('createNmsEditor requires a container HTMLElement.')
+    throw new Error("createNmsEditor requires a container HTMLElement.");
   }
-  const container = options.container
+  const container = options.container;
 
-  configureNmsEditor(options)
+  configureNmsEditor(options);
 
-  const mountTarget = resolveMountTarget(options)
-  const app: VueApp = createApp(App)
-  const pinia: Pinia = createPinia()
-  app.provide(NMS_EDITOR_OPTIONS_KEY, options)
-  app.use(pinia)
+  const mountTarget = resolveMountTarget(options);
+  const app: VueApp = createApp(App);
+  const pinia: Pinia = createPinia();
+  app.provide(NMS_EDITOR_OPTIONS_KEY, options);
+  app.use(pinia);
   app.config.errorHandler = (err) => {
-    const error = err instanceof Error ? err : new Error(String(err))
-    options.onError?.(error, { phase: 'vue' })
-  }
-  app.mount(mountTarget)
+    const error = err instanceof Error ? err : new Error(String(err));
+    options.onError?.(error, { phase: "vue" });
+  };
+  app.mount(mountTarget);
 
-  const editor = useEditorStore(pinia)
-  const ui = useUIStore(pinia)
+  const editor = useEditorStore(pinia);
+  const ui = useUIStore(pinia);
 
   return {
     destroy() {
-      app.unmount()
-      if (options.shadowDom) container.shadowRoot?.replaceChildren()
-      configureNmsEditor({})
+      app.unmount();
+      if (options.shadowDom) container.shadowRoot?.replaceChildren();
+      configureNmsEditor({});
     },
     upsertDevices(devices) {
-      editor.upsertDevices(devices)
+      editor.upsertDevices(devices);
     },
     removeDevices(ids) {
-      editor.removeDevices(ids)
+      editor.removeDevices(ids);
     },
     upsertLinks(links) {
-      editor.upsertLinks(links)
+      editor.upsertLinks(links);
     },
     removeLinks(ids) {
-      editor.removeLinks(ids)
+      editor.removeLinks(ids);
     },
     upsertSpaces(spaces) {
-      editor.upsertSpaces(spaces)
+      editor.upsertSpaces(spaces);
     },
     removeSpaces(ids) {
-      editor.removeSpaces(ids)
+      editor.removeSpaces(ids);
     },
     upsertInterfaces(interfaces) {
-      editor.upsertInterfaces(interfaces)
+      editor.upsertInterfaces(interfaces);
     },
     upsertVirtualNodes(nodes) {
-      editor.upsertVirtualNodes(nodes)
+      editor.upsertVirtualNodes(nodes);
     },
     removeVirtualNodes(ids) {
-      editor.removeVirtualNodes(ids)
+      editor.removeVirtualNodes(ids);
     },
     setOperatorState(deviceId, patch) {
-      editor.setOperatorState(deviceId, patch)
+      editor.setOperatorState(deviceId, patch);
     },
     setConnectionStatus(status, detail) {
-      ui.setConnectionStatus(status, detail)
+      ui.setConnectionStatus(status, detail);
     },
     notify(message, type) {
-      ui.addToast(message, type)
+      ui.addToast(message, type);
     },
     selectDevice(id) {
-      ui.select(id ? { type: 'device', id } : null)
+      ui.select(id ? { type: "device", id } : null);
     },
     applyFilter(filter) {
-      ui.setFilter(filter)
+      ui.setFilter(filter);
     },
     setMode(mode) {
-      ui.setMode(mode)
+      ui.setMode(mode);
     },
     async save() {
-      await options.onSave?.(editor.exportSnapshot())
+      await options.onSave?.(editor.exportSnapshot());
     },
     exportSnapshot: editor.exportSnapshot,
     importSnapshot: editor.importSnapshot,
     getDevice: editor.getDevice,
     autoLayout: editor.autoLayout,
     cancelAutoLayout: editor.cancelAutoLayout,
-  }
+  };
 }
 
 function resolveMountTarget(options: EditorOptions): Element | ShadowRoot {
-  const container = options.container!
-  if (!options.shadowDom) return container
+  const container = options.container!;
+  if (!options.shadowDom) return container;
 
-  const shadow = container.shadowRoot ?? container.attachShadow({ mode: 'open' })
-  shadow.replaceChildren()
+  const shadow =
+    container.shadowRoot ?? container.attachShadow({ mode: "open" });
+  shadow.replaceChildren();
   if (options.stylesheetUrl) {
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = options.stylesheetUrl
-    if (options.styleNonce) link.nonce = options.styleNonce
-    shadow.appendChild(link)
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = options.stylesheetUrl;
+    if (options.styleNonce) link.nonce = options.styleNonce;
+    shadow.appendChild(link);
   }
 
-  const mount = document.createElement('div')
-  mount.id = 'topospace-shadow-root'
-  mount.style.width = '100%'
-  mount.style.height = '100%'
-  shadow.appendChild(mount)
-  return mount
+  const mount = document.createElement("div");
+  mount.id = "topospace-shadow-root";
+  mount.style.width = "100%";
+  mount.style.height = "100%";
+  shadow.appendChild(mount);
+  return mount;
 }

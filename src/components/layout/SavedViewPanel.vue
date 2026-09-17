@@ -2,7 +2,13 @@
   <div class="sv-panel">
     <div class="sv-head">
       <span>Saved Views</span>
-      <button class="sv-save" @click="saveCurrentView" title="Save current view">Save Current</button>
+      <button
+        class="sv-save"
+        title="Save current view"
+        @click="saveCurrentView"
+      >
+        Save Current
+      </button>
       <button class="icon-btn" @click="ui.showSavedViews = false">Close</button>
     </div>
 
@@ -14,56 +20,112 @@
           <div class="sv-name">{{ view.name }}</div>
           <div class="sv-time">{{ view.createdAt }}</div>
         </div>
-        <button class="del-btn" @click="editor.removeSavedView(view.id)">✕</button>
+        <button class="del-btn" @click="editor.removeSavedView(view.id)">
+          ✕
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useEditorStore }  from '@/stores/editor'
-import { useUIStore }      from '@/stores/ui'
-import type { SavedView }  from '@/types'
+import { useEditorStore } from "@/stores/editor";
+import { useUIStore } from "@/stores/ui";
+import type { SavedView } from "@/types";
 
-const editor = useEditorStore()
-const ui     = useUIStore()
+const editor = useEditorStore();
+const ui = useUIStore();
 
 const emit = defineEmits<{
-  (e: 'load-view', view: SavedView): void
-  (e: 'save-view', name: string): void
-}>()
+  (e: "load-view", view: SavedView): void;
+  (e: "save-view", name: string): void;
+}>();
 
 function saveCurrentView() {
-  const name = prompt('Enter a view name:', `View-${editor.savedViews.length + 1}`) ?? ''
-  if (!name) return
-  emit('save-view', name)
+  const name =
+    prompt("Enter a view name:", `View-${editor.savedViews.length + 1}`) ?? "";
+  if (!name) return;
+  emit("save-view", name);
 }
 
 function loadView(view: SavedView) {
-  emit('load-view', view)
+  emit("load-view", view);
 }
 </script>
 
 <style scoped>
 .sv-panel {
-  width: 100%; flex-shrink: 0;
-  background: rgba(9,13,24,.5);
-  border-bottom: 1px solid #1a2a4a; overflow: hidden;
+  width: 100%;
+  flex-shrink: 0;
+  background: rgba(9, 13, 24, 0.5);
+  border-bottom: 1px solid #1a2a4a;
+  overflow: hidden;
 }
 .sv-head {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 10px; border-bottom: 1px solid #1a2a4a;
-  color: #cbd5e1; font-size: 12px; font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #1a2a4a;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 600;
 }
-.sv-save { background: #1e3a5f; border: 1px solid #2a4a8a; color: #93c5fd; padding: 3px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; }
-.icon-btn { background: none; border: none; color: #475569; cursor: pointer; margin-left: auto; }
-.sv-empty { padding: 12px 10px; color: #475569; font-size: 11px; text-align: center; }
-.sv-list  { max-height: 220px; overflow-y: auto; }
-.sv-row   { display: flex; align-items: center; padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,.03); }
-.sv-info  { flex: 1; cursor: pointer; }
-.sv-info:hover .sv-name { color: #60a5fa; }
-.sv-name  { color: #cbd5e1; font-size: 11px; }
-.sv-time  { color: #475569; font-size: 10px; }
-.del-btn  { background: none; border: none; color: #334155; cursor: pointer; font-size: 10px; }
-.del-btn:hover { color: #ef4444; }
+.sv-save {
+  background: #1e3a5f;
+  border: 1px solid #2a4a8a;
+  color: #93c5fd;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.icon-btn {
+  background: none;
+  border: none;
+  color: #475569;
+  cursor: pointer;
+  margin-left: auto;
+}
+.sv-empty {
+  padding: 12px 10px;
+  color: #475569;
+  font-size: 11px;
+  text-align: center;
+}
+.sv-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+.sv-row {
+  display: flex;
+  align-items: center;
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+.sv-info {
+  flex: 1;
+  cursor: pointer;
+}
+.sv-info:hover .sv-name {
+  color: #60a5fa;
+}
+.sv-name {
+  color: #cbd5e1;
+  font-size: 11px;
+}
+.sv-time {
+  color: #475569;
+  font-size: 10px;
+}
+.del-btn {
+  background: none;
+  border: none;
+  color: #334155;
+  cursor: pointer;
+  font-size: 10px;
+}
+.del-btn:hover {
+  color: #ef4444;
+}
 </style>

@@ -21,7 +21,7 @@
       <option value="maintenance">Maintenance</option>
     </select>
 
-    <div class="type-filter" ref="typeFilterEl">
+    <div ref="typeFilterEl" class="type-filter">
       <button
         class="btn"
         :class="{ 'btn-on': ui.filter.type.length > 0 }"
@@ -39,8 +39,8 @@
           {{ DEVICE_TYPE_LABEL[t] }}
         </label>
         <button
-          class="type-clear"
           v-if="ui.filter.type.length"
+          class="type-clear"
           @click="ui.setFilter({ type: [] })"
         >
           Clear
@@ -52,16 +52,30 @@
       class="alerts-only"
       title="Show only devices that aren't normal — everything else dims"
     >
-      <input type="checkbox" v-model="ui.alertsOnly" /> 🔔 Alerts only
+      <input v-model="ui.alertsOnly" type="checkbox" /> 🔔 Alerts only
     </label>
 
-    <div class="chip critical" :title="scopeLabel" :style="{ color: STATUS_COLOR_HEX.critical, borderColor: STATUS_COLOR_HEX.critical }">
+    <div
+      class="chip critical"
+      :title="scopeLabel"
+      :style="{
+        color: STATUS_COLOR_HEX.critical,
+        borderColor: STATUS_COLOR_HEX.critical,
+      }"
+    >
       Critical <b>{{ floorCritical }}</b
       ><span v-if="showTotals" class="chip-total">
         ({{ editor.criticalCount }} total)</span
       >
     </div>
-    <div class="chip warning" :title="scopeLabel" :style="{ color: STATUS_COLOR_HEX.warning, borderColor: STATUS_COLOR_HEX.warning }">
+    <div
+      class="chip warning"
+      :title="scopeLabel"
+      :style="{
+        color: STATUS_COLOR_HEX.warning,
+        borderColor: STATUS_COLOR_HEX.warning,
+      }"
+    >
       Warning <b>{{ floorWarning }}</b
       ><span v-if="showTotals" class="chip-total">
         ({{ editor.warningCount }} total)</span
@@ -91,8 +105,8 @@
     <button
       :class="['btn', ui.linkToolActive ? 'btn-accent-on' : 'btn-accent']"
       :disabled="ui.mode !== 'edit'"
-      @click="ui.toggleLinkTool()"
       title="Connect devices (L)"
+      @click="ui.toggleLinkTool()"
     >
       Connect
     </button>
@@ -100,8 +114,8 @@
     <button
       :class="['btn', ui.showBackgroundPanel ? 'btn-on' : '']"
       :disabled="ui.mode !== 'edit'"
-      @click="toggleBackgroundPanel"
       title="Place a floor-plan image or building model"
+      @click="toggleBackgroundPanel"
     >
       Background
     </button>
@@ -109,10 +123,18 @@
     <button
       :class="['btn', autoLayoutRunning ? 'btn-accent-on' : '']"
       :disabled="ui.mode !== 'edit'"
+      :title="
+        autoLayoutRunning
+          ? 'Cancel auto layout'
+          : 'Force-directed placement for devices without a manual position'
+      "
       @click="onAutoLayoutClick"
-      :title="autoLayoutRunning ? 'Cancel auto layout' : 'Force-directed placement for devices without a manual position'"
     >
-      {{ autoLayoutRunning ? `Layout… ${autoLayoutPercent}% (cancel)` : "Auto Layout" }}
+      {{
+        autoLayoutRunning
+          ? `Layout… ${autoLayoutPercent}% (cancel)`
+          : "Auto Layout"
+      }}
     </button>
 
     <button class="btn" title="Reset view (F)" @click="resetCamera">
@@ -210,8 +232,14 @@ async function onAutoLayoutClick() {
     editor.cancelAutoLayout();
     return;
   }
-  await editor.autoLayout();
-  ui.addToast("Auto layout complete", "success");
+  // Scoped to the currently viewed floor/site so devices belonging to other
+  // spaces don't get swept in and rendered into this view.
+  const deviceIds = [...editor.scopedDeviceIds(ui.activeRootSpaceId)];
+  const { cancelled } = await editor.autoLayout({ deviceIds });
+  ui.addToast(
+    cancelled ? "Auto layout cancelled" : "Auto layout complete",
+    cancelled ? "info" : "success",
+  );
 }
 </script>
 

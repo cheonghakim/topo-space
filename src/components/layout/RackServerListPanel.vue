@@ -1,5 +1,5 @@
 <template>
-  <aside class="panel" v-if="rack">
+  <aside v-if="rack" class="panel">
     <div class="panel-head">
       <span class="rack-name">{{ rack.name }}</span>
       <div class="summary">
@@ -7,7 +7,7 @@
         <span class="chip w">W {{ warnCount }}</span>
         <span class="chip n">N {{ normCount }}</span>
       </div>
-      <button class="close-btn" @click="close" title="Close">✕</button>
+      <button class="close-btn" title="Close" @click="close">✕</button>
     </div>
 
     <div class="hint">
@@ -41,7 +41,7 @@
           <div class="srv-name">{{ dev.hostname ?? dev.id }}</div>
           <div class="srv-ip">{{ dev.ip ?? "—" }}</div>
         </div>
-        <div class="srv-metrics" v-if="dev.metrics">
+        <div v-if="dev.metrics" class="srv-metrics">
           <span :class="{ hot: (dev.metrics.cpu ?? 0) > 85 }"
             >C{{ (dev.metrics.cpu ?? 0).toFixed(0) }}%</span
           >

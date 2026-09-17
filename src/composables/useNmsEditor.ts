@@ -292,10 +292,7 @@ function createNmsEditorRuntime(
       const tgt = editor.devices.get(l.targetDeviceId);
       return src?.status !== "offline" && tgt?.status !== "offline";
     });
-    particle.syncLinks(
-      activeLinks,
-      (id) => link.getLinkPath(id),
-    );
+    particle.syncLinks(activeLinks, (id) => link.getLinkPath(id));
   }
 
   function _bindEvents(canvas: HTMLCanvasElement) {
@@ -398,7 +395,11 @@ function createNmsEditorRuntime(
           ids.forEach((id) => {
             const mapping = editor.getMappingByDeviceId(id);
             if (!mapping?.position) return;
-            const pos = new THREE.Vector3(mapping.position.x, mapping.position.y, mapping.position.z);
+            const pos = new THREE.Vector3(
+              mapping.position.x,
+              mapping.position.y,
+              mapping.position.z,
+            );
             if (device.getDeviceWorldPos(id)) {
               device.setPosition(id, pos);
             } else {
@@ -474,7 +475,9 @@ function createNmsEditorRuntime(
           if (
             ui.mode === "edit" &&
             sel &&
-            (sel.type === "device" || sel.type === "space" || sel.type === "background")
+            (sel.type === "device" ||
+              sel.type === "space" ||
+              sel.type === "background")
           ) {
             attachGizmoToSelection(sel);
           } else {
@@ -761,7 +764,13 @@ function createNmsEditorRuntime(
       flash.update(delta);
       gizmo.update(scene.camera);
       device.tick(scene.camera);
-      space.updateLod(scene.camera, scene.controls.target, scene.getSize(), device.getLabelObstacles(), scene.getLabelExclusions());
+      space.updateLod(
+        scene.camera,
+        scene.controls.target,
+        scene.getSize(),
+        device.getLabelObstacles(),
+        scene.getLabelExclusions(),
+      );
       if (ui.showParticles) particle.update(delta, ui.visibleLinkTypes);
       _updateOffscreenAlerts(elapsed);
 
@@ -786,7 +795,12 @@ function createNmsEditorRuntime(
         });
       }
 
-      if (_pointerOverCanvas && !_gizmoAxis && !linkDrag.isDrawing && !dragMove.hasPending) {
+      if (
+        _pointerOverCanvas &&
+        !_gizmoAxis &&
+        !linkDrag.isDrawing &&
+        !dragMove.hasPending
+      ) {
         const hit = raycast.castHover(32);
         const newHov = hit.deviceId ?? hit.linkId ?? hit.linkHandleId ?? null;
         if (newHov) {
@@ -851,7 +865,8 @@ function createNmsEditorRuntime(
       if (!pos) continue;
 
       const ndc = pos.clone().project(cam);
-      const offscreen = Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1 || ndc.z > 1 || ndc.z < -1;
+      const offscreen =
+        Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1 || ndc.z > 1 || ndc.z < -1;
 
       let occluded = false;
       if (!offscreen) {
@@ -859,11 +874,15 @@ function createNmsEditorRuntime(
         const dir = pos.clone().sub(camPos).normalize();
         _offscreenRaycaster.set(camPos, dir);
         _offscreenRaycaster.far = Math.max(dist - 0.15, 0);
-        occluded = _offscreenRaycaster.intersectObjects(meshes, false).length > 0;
+        occluded =
+          _offscreenRaycaster.intersectObjects(meshes, false).length > 0;
       }
       if (!offscreen && !occluded) continue;
 
-      members.push({ id: dev.id, status: dev.status as "critical" | "warning" });
+      members.push({
+        id: dev.id,
+        status: dev.status as "critical" | "warning",
+      });
     }
     _offscreenMembers = members;
   }
@@ -899,7 +918,10 @@ function createNmsEditorRuntime(
       // border pointing the right way.
       let x = ndc.x;
       let y = -ndc.y;
-      if (ndc.z > 1 || ndc.z < -1) { x = -x; y = -y; } // behind the camera: flip
+      if (ndc.z > 1 || ndc.z < -1) {
+        x = -x;
+        y = -y;
+      } // behind the camera: flip
       const angle = Math.atan2(y, x);
       const margin = 0.92;
       const scale = Math.min(
@@ -1047,7 +1069,9 @@ function createNmsEditorRuntime(
         const t = gizmo.currentTarget;
         if (t?.type === "device") {
           device.setPosition(t.id, newPos);
-          link.refreshPositionsFor([t.id], (id) => device.getDeviceWorldPos(id));
+          link.refreshPositionsFor([t.id], (id) =>
+            device.getDeviceWorldPos(id),
+          );
           _syncParticles();
         } else if (t?.type === "space") {
           space.setPosition(t.id, newPos);
@@ -1162,7 +1186,9 @@ function createNmsEditorRuntime(
       // Refresh only the links touching what actually moved (keeps manual
       // routing, and stays cheap at 10k+ links instead of walking every link).
       if (movedDeviceIds.length) {
-        link.refreshPositionsFor(movedDeviceIds, (id) => device.getDeviceWorldPos(id));
+        link.refreshPositionsFor(movedDeviceIds, (id) =>
+          device.getDeviceWorldPos(id),
+        );
         _syncParticles();
       }
       _gizmoAxis = null;
@@ -1212,7 +1238,9 @@ function createNmsEditorRuntime(
           );
           editor.logChange("layout.update", `Device moved: ${targetId}`);
           ui.addToast(`Device moved`, "success");
-          link.refreshPositionsFor([targetId], (id) => device.getDeviceWorldPos(id));
+          link.refreshPositionsFor([targetId], (id) =>
+            device.getDeviceWorldPos(id),
+          );
           _syncParticles();
         } else if (targetType === "space") {
           editor.updateSpace(targetId, {
@@ -1586,7 +1614,7 @@ function createNmsEditorRuntime(
     camera.zoom(factor);
   }
 
-  function setCameraView(view: 'top' | 'perspective') {
+  function setCameraView(view: "top" | "perspective") {
     camera.setView(view);
   }
 
@@ -1616,16 +1644,21 @@ function createNmsEditorRuntime(
     return editor
       .scopedDevices(ui.activeRootSpaceId)
       .filter((d) => d.status === "critical" || d.status === "warning")
-      .sort((a, b) => (rank[a.status ?? ""] ?? 9) - (rank[b.status ?? ""] ?? 9));
+      .sort(
+        (a, b) => (rank[a.status ?? ""] ?? 9) - (rank[b.status ?? ""] ?? 9),
+      );
   }
 
   function cycleAlarms(direction: 1 | -1) {
     const list = _alarmDevices();
     if (!list.length) return;
     const curIdx = list.findIndex((d) => d.id === ui.selectedDeviceId);
-    const nextIdx = curIdx === -1
-      ? (direction === 1 ? 0 : list.length - 1)
-      : (curIdx + direction + list.length) % list.length;
+    const nextIdx =
+      curIdx === -1
+        ? direction === 1
+          ? 0
+          : list.length - 1
+        : (curIdx + direction + list.length) % list.length;
     const next = list[nextIdx];
     ui.select({ type: "device", id: next.id });
     focusDevice(next.id);

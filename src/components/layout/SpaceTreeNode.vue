@@ -6,13 +6,19 @@
       :style="{ paddingLeft: `${6 + depth * 12}px` }"
       @click="$emit('focus', space)"
     >
-      <span v-if="children.length" class="arrow" @click.stop="$emit('toggle', space.id)">
+      <span
+        v-if="children.length"
+        class="arrow"
+        @click.stop="$emit('toggle', space.id)"
+      >
         {{ isOpen ? "▾" : "▸" }}
       </span>
       <span v-else class="arrow-spacer" />
       <span class="kind-tag">{{ kindLabel }}</span>
       <span class="node-name">{{ space.name }}</span>
-      <span v-if="depth === 0" class="node-badge" :class="status">{{ statusLabel }}</span>
+      <span v-if="depth === 0" class="node-badge" :class="status">{{
+        statusLabel
+      }}</span>
       <span v-else class="dev-count">{{ deviceCount }}</span>
       <button
         v-if="ui.mode === 'edit'"
@@ -81,23 +87,40 @@ const editor = useEditorStore();
 const ui = useUIStore();
 
 const KIND_LABELS: Record<string, string> = {
-  building: "BLDG", floor: "FLR", site: "SITE", zone: "ZONE", rack: "RACK",
-  custom_group: "GRP", security_zone: "SEC", service: "SVC", external: "EXT", cloud: "CLD",
+  building: "BLDG",
+  floor: "FLR",
+  site: "SITE",
+  zone: "ZONE",
+  rack: "RACK",
+  custom_group: "GRP",
+  security_zone: "SEC",
+  service: "SVC",
+  external: "EXT",
+  cloud: "CLD",
 };
 // What kind of child a "+ Add …" button under this node should create.
 const NEXT_TYPE: Record<string, SpaceType> = {
-  building: "floor", floor: "zone", site: "zone", zone: "rack",
+  building: "floor",
+  floor: "zone",
+  site: "zone",
+  zone: "rack",
 };
 
 const children = computed(() => editor.childSpaces(props.space.id));
 const isOpen = computed(() => props.openNodes.has(props.space.id));
-const kindLabel = computed(() => KIND_LABELS[props.space.type] ?? props.space.type.slice(0, 4).toUpperCase());
+const kindLabel = computed(
+  () =>
+    KIND_LABELS[props.space.type] ?? props.space.type.slice(0, 4).toUpperCase(),
+);
 const childType = computed(() => NEXT_TYPE[props.space.type] ?? "zone");
 
 const deviceCount = computed(() => editor.scopedDevices(props.space.id).length);
 
 const hasIssue = computed(() =>
-  editor.scopedDevices(props.space.id).some((d) => d.status === "critical" || d.status === "warning"));
+  editor
+    .scopedDevices(props.space.id)
+    .some((d) => d.status === "critical" || d.status === "warning"),
+);
 
 const status = computed(() => {
   const devs = editor.scopedDevices(props.space.id);
@@ -106,7 +129,12 @@ const status = computed(() => {
   return "normal";
 });
 const statusLabel = computed(() =>
-  status.value === "critical" ? "CRIT" : status.value === "warning" ? "WARN" : "OK");
+  status.value === "critical"
+    ? "CRIT"
+    : status.value === "warning"
+      ? "WARN"
+      : "OK",
+);
 </script>
 
 <style scoped>

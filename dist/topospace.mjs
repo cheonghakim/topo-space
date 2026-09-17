@@ -468,22 +468,23 @@ var qt = {
 	bounds: 60
 };
 function Jt(e, t, n, r) {
-	let { idealDistance: i, clusterStrength: a, bounds: o } = r, s = e.length, c = i * i;
+	let { idealDistance: i, clusterStrength: a, bounds: o } = r, s = e.length, c = i * i, l = Array(s).fill(0), u = Array(s).fill(0);
 	for (let t = 0; t < s; t++) {
 		let n = e[t];
-		if (n.pinned) continue;
-		let r = 0, l = 0;
-		for (let o = 0; o < s; o++) {
-			if (t === o) continue;
-			let s = e[o], u = n.x - s.x, d = n.z - s.z, f = u * u + d * d;
-			f < 1e-4 && (u = (Math.random() - .5) * .1, d = (Math.random() - .5) * .1, f = u * u + d * d);
-			let p = Math.sqrt(f), m = c / p;
-			if (r += u / p * m, l += d / p * m, n.clusterId && n.clusterId === s.clusterId) {
+		for (let r = t + 1; r < s; r++) {
+			let o = e[r], s = n.x - o.x, d = n.z - o.z, f = s * s + d * d;
+			f < 1e-4 && (s = (Math.random() - .5) * .1, d = (Math.random() - .5) * .1, f = s * s + d * d);
+			let p = Math.sqrt(f), m = c / p, h = s / p * m, g = d / p * m;
+			if (n.clusterId && n.clusterId === o.clusterId) {
 				let e = p / i * a;
-				r -= u / p * e, l -= d / p * e;
+				h -= s / p * e, g -= d / p * e;
 			}
+			l[t] += h, u[t] += g, l[r] -= h, u[r] -= g;
 		}
-		r -= n.x / o, l -= n.z / o, n.vx = (n.vx + r) * .15, n.vz = (n.vz + l) * .15;
+	}
+	for (let t = 0; t < s; t++) {
+		let n = e[t];
+		n.pinned || (n.vx = (n.vx + l[t] - n.x / o) * .15, n.vz = (n.vz + u[t] - n.z / o) * .15);
 	}
 	for (let e of n) {
 		let n = t.get(e.sourceId), r = t.get(e.targetId);
@@ -1205,33 +1206,32 @@ var Zt = class {
 		return typeof e.bandwidth == "number" && e.bandwidth > 0 ? Math.min(3, Math.max(.3, Math.log10(e.bandwidth + 10) / 2)) : e.confidence === "high" ? 1.5 : e.confidence === "low" ? .5 : 1;
 	}
 	function We(e = {}) {
-		if (!T("layout:update")) return Promise.resolve();
-		_?.cancel();
-		let t = (e.deviceIds ?? [...r.value.keys()]).filter((e) => r.value.has(e)), n = new Set(t), i = /* @__PURE__ */ new Map();
-		o.value.forEach((e) => i.set(e.rawDeviceId, e));
-		let a = t.map((t) => {
-			let n = i.get(t), r = !!n?.position, a = r && !e.includeMapped, o = r ? {
-				x: n.position.x,
-				z: n.position.z
+		if (!T("layout:update")) return Promise.resolve({ cancelled: !0 });
+		let t = /* @__PURE__ */ new Map();
+		o.value.forEach((e) => t.set(e.rawDeviceId, e));
+		let n = (e.deviceIds ?? [...t.keys()]).filter((e) => r.value.has(e)), i = new Set(n), a = n.map((n) => {
+			let r = t.get(n), i = !!r?.position, a = i && !e.includeMapped, o = i ? {
+				x: r.position.x,
+				z: r.position.z
 			} : {
 				x: (Math.random() - .5) * 40,
 				z: (Math.random() - .5) * 40
 			};
 			return {
-				id: t,
+				id: n,
 				x: o.x,
 				z: o.z,
 				pinned: a,
-				clusterId: n?.primarySpaceId
+				clusterId: r?.primarySpaceId
 			};
 		}), c = [];
 		s.value.forEach((e) => {
-			!n.has(e.sourceDeviceId) || !n.has(e.targetDeviceId) || c.push({
+			!i.has(e.sourceDeviceId) || !i.has(e.targetDeviceId) || c.push({
 				sourceId: e.sourceDeviceId,
 				targetId: e.targetDeviceId,
 				weight: Ue(e)
 			});
-		});
+		}), _?.run.cancel();
 		let l = e.iterations ?? 200;
 		g.value = {
 			iteration: 0,
@@ -1242,25 +1242,32 @@ var Zt = class {
 				iteration: t.iteration,
 				iterations: t.iterations
 			}, e.onProgress?.(t.iterations ? t.iteration / t.iterations : 1);
-		});
-		return _ = u, u.promise.then((e) => {
-			_ === u && (_ = null), g.value = null;
-			let t = [];
-			a.forEach((n) => {
-				if (n.pinned) return;
-				let r = e.get(n.id);
-				if (!r) return;
-				let a = i.get(n.id);
-				be(n.id, a?.primarySpaceId ?? "", a?.slotIndex ?? 0, {
-					x: r.x,
+		}), d = {
+			run: u,
+			cancelledByUser: !1
+		};
+		return _ = d, u.promise.then((e) => {
+			if (_ !== d) return { cancelled: !0 };
+			_ = null, g.value = null;
+			let n = [];
+			return a.forEach((r) => {
+				if (r.pinned) return;
+				let i = e.get(r.id);
+				if (!i) return;
+				let a = t.get(r.id), o = a?.primarySpaceId ?? "", s = x("device:map", {
+					id: r.id,
+					spaceId: o
+				});
+				be(r.id, o, a?.slotIndex ?? 0, {
+					x: i.x,
 					y: a?.position?.y ?? 0,
-					z: r.z
-				}), t.push(n.id);
-			}), t.length && (Be("layout.update", `Auto layout placed ${t.length} device(s)`), v.value = t);
+					z: i.z
+				}), s && n.push(r.id);
+			}), n.length && (Be("layout.update", `Auto layout placed ${n.length} device(s)`), v.value = n), { cancelled: d.cancelledByUser };
 		});
 	}
 	function Ge() {
-		_?.cancel();
+		_ && (_.cancelledByUser = !0), _?.run.cancel();
 	}
 	function Ke(e) {
 		return e.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "x";
@@ -4227,7 +4234,7 @@ var wi = class {
 			let e = null, t = Infinity;
 			if (this.badgeSeverity.forEach((n, r) => {
 				n < t && (t = n, e = r);
-			}), e === null || t >= o) return;
+			}), e === null || t > o) return;
 			let n = this.statusBadges.get(e);
 			this.scene.remove(n), n.element.remove(), this.statusBadges.delete(e), this.badgeSeverity.delete(e);
 		}
@@ -9775,7 +9782,7 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 	let n = e.__vccOpts || e;
 	for (let [e, r] of t) n[e] = r;
 	return n;
-}, mu = /* @__PURE__ */ $(pu, [["__scopeId", "data-v-115df291"]]), hu = { class: "toolbar" }, gu = { class: "search-wrap" }, _u = {
+}, mu = /* @__PURE__ */ $(pu, [["__scopeId", "data-v-09c69633"]]), hu = { class: "toolbar" }, gu = { class: "search-wrap" }, _u = {
 	key: 0,
 	class: "type-dropdown"
 }, vu = ["checked", "onChange"], yu = {
@@ -9819,7 +9826,8 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 				n.cancelAutoLayout();
 				return;
 			}
-			await n.autoLayout(), r.addToast("Auto layout complete", "success");
+			let e = [...n.scopedDeviceIds(r.activeRootSpaceId)], { cancelled: t } = await n.autoLayout({ deviceIds: e });
+			r.addToast(t ? "Auto layout cancelled" : "Auto layout complete", t ? "info" : "success");
 		}
 		return (t, i) => (b(), c("header", hu, [
 			l("div", gu, [N(l("input", {
@@ -9835,11 +9843,11 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 			N(l("select", {
 				"onUpdate:modelValue": i[3] ||= (e) => o.value = e,
 				class: "sel"
-			}, [...i[12] ||= [u("<option value=\"\" data-v-8cce7c24>All status</option><option value=\"critical\" data-v-8cce7c24>Critical</option><option value=\"warning\" data-v-8cce7c24>Warning</option><option value=\"normal\" data-v-8cce7c24>Normal</option><option value=\"offline\" data-v-8cce7c24>Offline</option><option value=\"maintenance\" data-v-8cce7c24>Maintenance</option>", 6)]], 512), [[k, o.value]]),
+			}, [...i[12] ||= [u("<option value=\"\" data-v-953c3e29>All status</option><option value=\"critical\" data-v-953c3e29>Critical</option><option value=\"warning\" data-v-953c3e29>Warning</option><option value=\"normal\" data-v-953c3e29>Normal</option><option value=\"offline\" data-v-953c3e29>Offline</option><option value=\"maintenance\" data-v-953c3e29>Maintenance</option>", 6)]], 512), [[k, o.value]]),
 			l("div", {
-				class: "type-filter",
 				ref_key: "typeFilterEl",
-				ref: m
+				ref: m,
+				class: "type-filter"
 			}, [l("button", {
 				class: g(["btn", { "btn-on": E(r).filter.type.length > 0 }]),
 				onClick: i[4] ||= (e) => p.value = !p.value
@@ -9856,8 +9864,8 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 				onClick: i[5] ||= (e) => E(r).setFilter({ type: [] })
 			}, " Clear ")) : s("", !0)])) : s("", !0)], 512),
 			l("label", yu, [N(l("input", {
-				type: "checkbox",
-				"onUpdate:modelValue": i[6] ||= (e) => E(r).alertsOnly = e
+				"onUpdate:modelValue": i[6] ||= (e) => E(r).alertsOnly = e,
+				type: "checkbox"
 			}, null, 512), [[D, E(r).alertsOnly]]), i[13] ||= d(" 🔔 Alerts only ", -1)]),
 			l("div", {
 				class: "chip critical",
@@ -9895,20 +9903,20 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 			l("button", {
 				class: g(["btn", E(r).linkToolActive ? "btn-accent-on" : "btn-accent"]),
 				disabled: E(r).mode !== "edit",
-				onClick: i[9] ||= (e) => E(r).toggleLinkTool(),
-				title: "Connect devices (L)"
+				title: "Connect devices (L)",
+				onClick: i[9] ||= (e) => E(r).toggleLinkTool()
 			}, " Connect ", 10, Eu),
 			l("button", {
 				class: g(["btn", E(r).showBackgroundPanel ? "btn-on" : ""]),
 				disabled: E(r).mode !== "edit",
-				onClick: F,
-				title: "Place a floor-plan image or building model"
+				title: "Place a floor-plan image or building model",
+				onClick: F
 			}, " Background ", 10, Du),
 			l("button", {
 				class: g(["btn", I.value ? "btn-accent-on" : ""]),
 				disabled: E(r).mode !== "edit",
-				onClick: R,
-				title: I.value ? "Cancel auto layout" : "Force-directed placement for devices without a manual position"
+				title: I.value ? "Cancel auto layout" : "Force-directed placement for devices without a manual position",
+				onClick: R
 			}, T(I.value ? `Layout… ${L.value}% (cancel)` : "Auto Layout"), 11, Ou),
 			l("button", {
 				class: "btn",
@@ -9921,14 +9929,14 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 			}, " Help ", 2)
 		]));
 	}
-}), [["__scopeId", "data-v-8cce7c24"]]), Au = { class: "ap-sticky" }, ju = { class: "ap-head" }, Mu = {
+}), [["__scopeId", "data-v-953c3e29"]]), Au = { class: "ap-sticky" }, ju = { class: "ap-head" }, Mu = {
 	class: "ap-filters",
 	role: "group",
 	"aria-label": "Alert severity"
 }, Nu = ["aria-pressed"], Pu = ["aria-pressed", "onClick"], Fu = { "aria-hidden": "true" }, Iu = { class: "ap-scope" }, Lu = {
 	key: 0,
 	class: "ap-empty"
-}, Ru = ["onClick", "title"], zu = { class: "ap-group-name" }, Bu = { class: "ap-group-count" }, Vu = { class: "ap-device-list" }, Hu = [
+}, Ru = ["title", "onClick"], zu = { class: "ap-group-name" }, Bu = { class: "ap-group-count" }, Vu = { class: "ap-device-list" }, Hu = [
 	"aria-pressed",
 	"title",
 	"onClick"
@@ -10011,15 +10019,15 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 					l("span", { class: g(["ap-count", O.value]) }, T(D.value), 3),
 					l("button", {
 						class: "ap-close",
-						onClick: n[0] ||= (e) => E(a).closeLeftDock(),
 						title: "Close",
-						"aria-label": "Close alerts"
-					}, "×")
+						"aria-label": "Close alerts",
+						onClick: n[0] ||= (e) => E(a).closeLeftDock()
+					}, " × ")
 				]),
 				l("div", Mu, [l("button", {
 					"aria-pressed": m.value === null,
 					onClick: n[1] ||= (e) => m.value = null
-				}, "All", 8, Nu), (b(), c(e, null, C(h, (e) => l("button", {
+				}, " All ", 8, Nu), (b(), c(e, null, C(h, (e) => l("button", {
 					key: e,
 					class: g(e),
 					"aria-pressed": m.value === e,
@@ -10029,7 +10037,7 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 					d(" " + T(E(zn)[e]) + " ", 1),
 					l("b", null, T(y.value[e]), 1)
 				], 10, Pu)), 64))]),
-				l("p", Iu, "All sites · " + T(w.value) + " devices · highest severity first", 1)
+				l("p", Iu, " All sites · " + T(w.value) + " devices · highest severity first ", 1)
 			]),
 			x.value.length ? s("", !0) : (b(), c("div", Lu, T(m.value ? "No " + E(zn)[m.value].toLowerCase() + " alerts" : "No active alerts"), 1)),
 			(b(!0), c(e, null, C(x.value, (t) => (b(), c("div", {
@@ -10037,8 +10045,8 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 				class: "ap-group"
 			}, [l("button", {
 				class: "ap-group-header",
-				onClick: (e) => j(t),
-				title: t.spaceName
+				title: t.spaceName,
+				onClick: (e) => j(t)
 			}, [l("span", zu, T(t.spaceName), 1), l("span", Bu, [d(T(t.devices.length) + " devices ", 1), n[3] ||= l("span", { "aria-hidden": "true" }, "↗", -1)])], 8, Ru), l("div", Vu, [(b(!0), c(e, null, C(t.devices, (e) => (b(), c("button", {
 				key: e.id,
 				class: g(["ap-device", [e.status, { selected: E(a).selectedDeviceId === e.id }]]),
@@ -10056,7 +10064,7 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 			], 10, Hu))), 128))])]))), 128))
 		], 4));
 	}
-}), [["__scopeId", "data-v-8f692762"]]), Xu = { class: "ct-panel" }, Zu = { class: "ct-head" }, Qu = {
+}), [["__scopeId", "data-v-5b03d0af"]]), Xu = { class: "ct-panel" }, Zu = { class: "ct-head" }, Qu = {
 	key: 0,
 	class: "ct-mode-notice"
 }, $u = { class: "ct-list" }, ed = { class: "ct-name" }, td = {
@@ -10312,8 +10320,8 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 		return (t, r) => (b(), c("aside", Xu, [
 			l("div", Zu, [r[8] ||= l("span", { class: "ct-title" }, "Device Types", -1), l("button", {
 				class: "ct-close",
-				onClick: r[0] ||= (e) => E(a).closeLeftDock(),
-				title: "Close"
+				title: "Close",
+				onClick: r[0] ||= (e) => E(a).closeLeftDock()
 			}, " ✕ ")]),
 			E(a).mode === "edit" ? s("", !0) : (b(), c("div", Qu, " Switch to Edit mode to customize types. ")),
 			r[18] ||= l("div", { class: "ct-section-label" }, "Built-in Types", -1),
@@ -10382,8 +10390,8 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 					F.value === "override" ? s("", !0) : (b(), c(e, { key: 0 }, [l("label", pd, [r[10] ||= d("Name ", -1), N(l("input", {
 						"onUpdate:modelValue": r[1] ||= (e) => L.value.label = e,
 						class: "ct-input",
-						onInput: W,
-						placeholder: "Core Router"
+						placeholder: "Core Router",
+						onInput: W
 					}, null, 544), [[A, L.value.label]])]), l("label", md, [r[11] ||= d("Abbr (≤4) ", -1), N(l("input", {
 						"onUpdate:modelValue": r[2] ||= (e) => L.value.abbr = e,
 						class: "ct-input ct-input-sm",
@@ -10400,19 +10408,19 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 						key: e,
 						class: "ct-radio"
 					}, [N(l("input", {
+						"onUpdate:modelValue": r[3] ||= (e) => L.value.shape = e,
 						type: "radio",
-						value: e,
-						"onUpdate:modelValue": r[3] ||= (e) => L.value.shape = e
+						value: e
 					}, null, 8, bd), [[O, L.value.shape]]), d(" " + T(e), 1)])), 64))])]),
 					l("label", xd, [
 						r[14] ||= d("Width ", -1),
 						l("span", Sd, T(L.value.w.toFixed(1)), 1),
 						N(l("input", {
+							"onUpdate:modelValue": r[4] ||= (e) => L.value.w = e,
 							type: "range",
 							min: "0.3",
 							max: "2.0",
 							step: "0.1",
-							"onUpdate:modelValue": r[4] ||= (e) => L.value.w = e,
 							class: "ct-slider"
 						}, null, 512), [[
 							A,
@@ -10425,11 +10433,11 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 						r[15] ||= d("Height ", -1),
 						l("span", wd, T(L.value.h.toFixed(2)), 1),
 						N(l("input", {
+							"onUpdate:modelValue": r[5] ||= (e) => L.value.h = e,
 							type: "range",
 							min: "0.05",
 							max: "2.0",
 							step: "0.05",
-							"onUpdate:modelValue": r[5] ||= (e) => L.value.h = e,
 							class: "ct-slider"
 						}, null, 512), [[
 							A,
@@ -10442,11 +10450,11 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 						r[16] ||= d("Depth ", -1),
 						l("span", Ed, T(L.value.d.toFixed(1)), 1),
 						N(l("input", {
+							"onUpdate:modelValue": r[6] ||= (e) => L.value.d = e,
 							type: "range",
 							min: "0.3",
 							max: "2.0",
 							step: "0.1",
-							"onUpdate:modelValue": r[6] ||= (e) => L.value.d = e,
 							class: "ct-slider"
 						}, null, 512), [[
 							A,
@@ -10494,7 +10502,7 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 			})
 		]));
 	}
-}), [["__scopeId", "data-v-8f8e053e"]]), Rd = { class: "bg-panel" }, zd = { class: "bg-head" }, Bd = {
+}), [["__scopeId", "data-v-50eb05a6"]]), Rd = { class: "bg-panel" }, zd = { class: "bg-head" }, Bd = {
 	key: 0,
 	class: "bg-mode-notice"
 }, Vd = { class: "bg-toggle-row" }, Hd = ["checked"], Ud = { class: "bg-toggle-hint" }, Wd = {
@@ -10602,8 +10610,8 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 		}
 		return (t, i) => (b(), c("aside", Rd, [l("div", zd, [i[17] ||= l("span", { class: "bg-title" }, "Background", -1), l("button", {
 			class: "bg-close",
-			onClick: i[0] ||= (e) => E(r).closeLeftDock(),
-			title: "Close"
+			title: "Close",
+			onClick: i[0] ||= (e) => E(r).closeLeftDock()
 		}, " ✕ ")]), E(r).mode === "edit" ? (b(), c(e, { key: 1 }, [
 			l("label", Vd, [
 				l("input", {
@@ -10641,9 +10649,9 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 				l("div", Zd, T(R.value.name), 1),
 				l("div", Qd, [
 					l("label", $d, [i[20] ||= d("X ", -1), N(l("input", {
+						"onUpdate:modelValue": i[2] ||= (e) => z.value = e,
 						type: "number",
 						step: "0.5",
-						"onUpdate:modelValue": i[2] ||= (e) => z.value = e,
 						class: "bg-input",
 						onChange: ie
 					}, null, 544), [[
@@ -10653,9 +10661,9 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 						{ number: !0 }
 					]])]),
 					l("label", ef, [i[21] ||= d("Y ", -1), N(l("input", {
+						"onUpdate:modelValue": i[3] ||= (e) => B.value = e,
 						type: "number",
 						step: "0.1",
-						"onUpdate:modelValue": i[3] ||= (e) => B.value = e,
 						class: "bg-input",
 						onChange: ie
 					}, null, 544), [[
@@ -10665,9 +10673,9 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 						{ number: !0 }
 					]])]),
 					l("label", tf, [i[22] ||= d("Z ", -1), N(l("input", {
+						"onUpdate:modelValue": i[4] ||= (e) => V.value = e,
 						type: "number",
 						step: "0.5",
-						"onUpdate:modelValue": i[4] ||= (e) => V.value = e,
 						class: "bg-input",
 						onChange: ie
 					}, null, 544), [[
@@ -10678,9 +10686,9 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 					]])])
 				]),
 				l("label", nf, [i[23] ||= d("Rotation Y (°) ", -1), N(l("input", {
+					"onUpdate:modelValue": i[5] ||= (e) => H.value = e,
 					type: "number",
 					step: "5",
-					"onUpdate:modelValue": i[5] ||= (e) => H.value = e,
 					class: "bg-input",
 					onChange: i[6] ||= (e) => W("rotationY", H.value)
 				}, null, 544), [[
@@ -10690,10 +10698,10 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 					{ number: !0 }
 				]])]),
 				R.value.kind === "model" ? (b(), c("label", rf, [i[24] ||= d("Scale ", -1), N(l("input", {
+					"onUpdate:modelValue": i[7] ||= (e) => U.value = e,
 					type: "number",
 					step: "0.1",
 					min: "0.01",
-					"onUpdate:modelValue": i[7] ||= (e) => U.value = e,
 					class: "bg-input",
 					onChange: i[8] ||= (e) => W("scale", U.value)
 				}, null, 544), [[
@@ -10702,10 +10710,10 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 					void 0,
 					{ number: !0 }
 				]])])) : (b(), c("div", af, [l("label", of, [i[25] ||= d("Width ", -1), N(l("input", {
+					"onUpdate:modelValue": i[9] ||= (e) => ee.value = e,
 					type: "number",
 					step: "0.5",
 					min: "0.1",
-					"onUpdate:modelValue": i[9] ||= (e) => ee.value = e,
 					class: "bg-input",
 					onChange: i[10] ||= (e) => W("width", ee.value)
 				}, null, 544), [[
@@ -10714,10 +10722,10 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 					void 0,
 					{ number: !0 }
 				]])]), l("label", sf, [i[26] ||= d("Depth ", -1), N(l("input", {
+					"onUpdate:modelValue": i[11] ||= (e) => te.value = e,
 					type: "number",
 					step: "0.5",
 					min: "0.1",
-					"onUpdate:modelValue": i[11] ||= (e) => te.value = e,
 					class: "bg-input",
 					onChange: i[12] ||= (e) => W("depth", te.value)
 				}, null, 544), [[
@@ -10730,11 +10738,11 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 					i[27] ||= d("Opacity (dashboard view) ", -1),
 					l("span", lf, T(ne.value.toFixed(2)), 1),
 					N(l("input", {
+						"onUpdate:modelValue": i[13] ||= (e) => ne.value = e,
 						type: "range",
 						min: "0.05",
 						max: "0.9",
 						step: "0.05",
-						"onUpdate:modelValue": i[13] ||= (e) => ne.value = e,
 						class: "bg-slider",
 						onChange: i[14] ||= (e) => W("opacity", ne.value)
 					}, null, 544), [[
@@ -10783,7 +10791,7 @@ var au = ["onMouseenter", "onClick"], ou = { class: "menu-label" }, su = {
 			})
 		], 64)) : (b(), c("div", Bd, " Switch to Edit mode to manage backgrounds. "))]));
 	}
-}), [["__scopeId", "data-v-b1c621a3"]]);
+}), [["__scopeId", "data-v-bb9ede0e"]]);
 //#endregion
 //#region src/composables/useDeviceTypeHelpers.ts
 function xf() {
@@ -10861,8 +10869,8 @@ var Sf = {
 				]),
 				l("button", {
 					class: "close-btn",
-					onClick: y,
-					title: "Close"
+					title: "Close",
+					onClick: y
 				}, "✕")
 			]),
 			n[1] ||= l("div", { class: "hint" }, " Click a device to open details · hover to highlight in 3D. ", -1),
@@ -10889,7 +10897,7 @@ var Sf = {
 			], 42, Af))), 128))])
 		])) : s("", !0);
 	}
-}), [["__scopeId", "data-v-daf1a1f4"]]), If = {
+}), [["__scopeId", "data-v-87a67249"]]), If = {
 	key: 1,
 	class: "arrow-spacer"
 }, Lf = { class: "kind-tag" }, Rf = { class: "node-name" }, zf = {
@@ -10982,7 +10990,7 @@ var Sf = {
 			}, " + Add " + T(h.value), 5)) : s("", !0)], 64)) : s("", !0)]);
 		};
 	}
-}), [["__scopeId", "data-v-203c062c"]]), Vf = { class: "panel" }, Hf = { class: "panel-head" }, Uf = { class: "head-actions" }, Wf = { class: "tree-body" }, Gf = {
+}), [["__scopeId", "data-v-41fb5253"]]), Vf = { class: "panel" }, Hf = { class: "panel-head" }, Uf = { class: "head-actions" }, Wf = { class: "tree-body" }, Gf = {
 	key: 0,
 	class: "site-node"
 }, Kf = ["onClick"], qf = { class: "node-name" }, Jf = ["onClick"], Yf = {
@@ -11076,8 +11084,8 @@ var Sf = {
 				onClick: i[0] ||= (e) => m.value = !0
 			}, " Add ")) : s("", !0), l("button", {
 				class: "text-btn",
-				onClick: i[1] ||= (e) => E(a).closeLeftDock(),
-				title: "Close"
+				title: "Close",
+				onClick: i[1] ||= (e) => E(a).closeLeftDock()
 			}, " Close ")])]),
 			l("div", Wf, [
 				(b(!0), c(e, null, C(E(r).rootSpaces, (e) => (b(), o(Bf, {
@@ -11168,7 +11176,7 @@ var Sf = {
 			})
 		]));
 	}
-}), [["__scopeId", "data-v-7a654c8c"]]), $f = { class: "panel" }, ep = { class: "panel-head" }, tp = {
+}), [["__scopeId", "data-v-350014e0"]]), $f = { class: "panel" }, ep = { class: "panel-head" }, tp = {
 	key: 0,
 	class: "add-form"
 }, np = { class: "add-row" }, rp = { label: "Built-in" }, ip = ["value"], ap = {
@@ -11215,13 +11223,13 @@ var Sf = {
 				E(i).mode === "edit" ? (b(), c("button", {
 					key: 0,
 					class: "text-btn",
-					onClick: x[0] ||= (e) => m.value = !m.value,
-					title: "Add device manually"
+					title: "Add device manually",
+					onClick: x[0] ||= (e) => m.value = !m.value
 				}, " Add ")) : s("", !0),
 				l("button", {
 					class: "close-btn",
-					onClick: x[1] ||= (e) => E(i).closeLeftDock(),
-					title: "Close"
+					title: "Close",
+					onClick: x[1] ||= (e) => E(i).closeLeftDock()
 				}, " ✕ ")
 			]),
 			f(n, { name: "fade" }, {
@@ -11282,14 +11290,14 @@ var Sf = {
 				E(i).mode === "edit" ? (b(), c("button", {
 					key: 0,
 					class: "ignore-btn",
-					onClick: F((t) => D(e.id), ["stop"]),
-					title: "Ignore"
+					title: "Ignore",
+					onClick: F((t) => D(e.id), ["stop"])
 				}, " ✕ ", 8, mp)) : s("", !0)
 			], 42, lp))), 128))]),
 			l("div", hp, [l("span", gp, T(E(i).mode === "edit" ? "Drag a device onto the 3D scene to place it." : "Switch to Edit mode to place devices."), 1)])
 		]));
 	}
-}), [["__scopeId", "data-v-7e740f0f"]]), vp = {
+}), [["__scopeId", "data-v-8f912bca"]]), vp = {
 	key: 0,
 	class: "panel"
 }, yp = { class: "panel-head" }, bp = { class: "dev-title" }, xp = { class: "dev-name" }, Sp = { class: "dev-ip" }, Cp = {
@@ -11423,28 +11431,23 @@ var Sf = {
 			M.value?.operatorState?.acknowledged ? (b(), c("span", Cp, "✓ Ack")) : s("", !0),
 			l("button", {
 				class: "close-btn",
-				onClick: n[0] ||= (e) => E(r).select(null),
-				title: "Close"
-			}, "✕")
+				title: "Close",
+				onClick: n[0] ||= (e) => E(r).select(null)
+			}, " ✕ ")
 		])]), l("div", wp, [
-			l("section", Tp, [n[18] ||= l("div", { class: "sec-title" }, "Info", -1), l("div", Ep, [
+			l("section", Tp, [n[13] ||= l("div", { class: "sec-title" }, "Info", -1), l("div", Ep, [
 				n[8] ||= l("span", { class: "info-k" }, "Vendor", -1),
-				n[9] ||= d(),
 				l("span", Dp, T(O.value.vendor ?? "—"), 1),
-				n[10] ||= l("span", { class: "info-k" }, "Model", -1),
-				n[11] ||= d(),
+				n[9] ||= l("span", { class: "info-k" }, "Model", -1),
 				l("span", Op, T(O.value.model ?? "—"), 1),
-				n[12] ||= l("span", { class: "info-k" }, "OS", -1),
-				n[13] ||= d(),
+				n[10] ||= l("span", { class: "info-k" }, "OS", -1),
 				l("span", kp, T(O.value.os ?? "—"), 1),
-				n[14] ||= l("span", { class: "info-k" }, "Source", -1),
-				n[15] ||= d(),
+				n[11] ||= l("span", { class: "info-k" }, "Source", -1),
 				l("span", Ap, T(O.value.source), 1),
-				n[16] ||= l("span", { class: "info-k" }, "Sync", -1),
-				n[17] ||= d(),
+				n[12] ||= l("span", { class: "info-k" }, "Sync", -1),
 				l("span", jp, T(O.value.syncState), 1)
 			])]),
-			O.value.metrics ? (b(), c("section", Mp, [n[19] ||= l("div", { class: "sec-title" }, "Metrics", -1), (b(!0), c(e, null, C(R.value, (e) => (b(), c("div", {
+			O.value.metrics ? (b(), c("section", Mp, [n[14] ||= l("div", { class: "sec-title" }, "Metrics", -1), (b(!0), c(e, null, C(R.value, (e) => (b(), c("div", {
 				key: e.key,
 				class: "metric-row"
 			}, [
@@ -11477,11 +11480,11 @@ var Sf = {
 				l("div", Gp, [l("span", null, "In " + T(B(e.trafficIn)), 1), l("span", null, "Out " + T(B(e.trafficOut)), 1)]),
 				e.errors ? (b(), c("span", Kp, "err:" + T(e.errors), 1)) : s("", !0)
 			], 2))), 128))])) : s("", !0)]),
-			E(r).mode === "edit" ? (b(), c("section", qp, [n[20] ||= l("div", { class: "sec-title" }, "Visual Shape", -1), l("div", Jp, [N(l("select", {
+			E(r).mode === "edit" ? (b(), c("section", qp, [n[15] ||= l("div", { class: "sec-title" }, "Visual Shape", -1), l("div", Jp, [N(l("select", {
 				"onUpdate:modelValue": n[2] ||= (e) => w.value = e,
 				class: "vt-sel"
 			}, [
-				l("option", Yp, "Default (" + T(O.value?.normalizedType ?? "unknown") + ")", 1),
+				l("option", Yp, " Default (" + T(O.value?.normalizedType ?? "unknown") + ") ", 1),
 				l("optgroup", Xp, [(b(!0), c(e, null, C(E(a).filter((e) => !e.custom), (e) => (b(), c("option", {
 					key: e.id,
 					value: e.id
@@ -11494,18 +11497,18 @@ var Sf = {
 				class: "vt-apply",
 				onClick: L
 			}, "Apply")])])) : s("", !0),
-			E(r).mode === "edit" ? (b(), c("section", em, [n[24] ||= l("div", { class: "sec-title" }, "Annotation", -1), l("div", tm, [
-				l("label", null, [n[21] ||= d("Display name ", -1), N(l("input", {
+			E(r).mode === "edit" ? (b(), c("section", em, [n[19] ||= l("div", { class: "sec-title" }, "Annotation", -1), l("div", tm, [
+				l("label", null, [n[16] ||= d("Display name ", -1), N(l("input", {
 					"onUpdate:modelValue": n[3] ||= (e) => v.value = e,
 					class: "anno-input",
 					placeholder: "Device alias"
 				}, null, 512), [[A, v.value]])]),
-				l("label", null, [n[22] ||= d("Memo ", -1), N(l("textarea", {
+				l("label", null, [n[17] ||= d("Memo ", -1), N(l("textarea", {
 					"onUpdate:modelValue": n[4] ||= (e) => y.value = e,
 					class: "anno-input anno-textarea",
 					rows: "2"
 				}, null, 512), [[A, y.value]])]),
-				l("label", null, [n[23] ||= d("Tags (comma separated) ", -1), N(l("input", {
+				l("label", null, [n[18] ||= d("Tags (comma separated) ", -1), N(l("input", {
 					"onUpdate:modelValue": n[5] ||= (e) => x.value = e,
 					class: "anno-input",
 					placeholder: "web, db, prod"
@@ -11516,18 +11519,18 @@ var Sf = {
 				}, "Save")
 			])])) : s("", !0),
 			E(r).mode === "edit" ? (b(), c("section", nm, [
-				n[25] ||= l("div", { class: "sec-title" }, "Actions", -1),
+				n[20] ||= l("div", { class: "sec-title" }, "Actions", -1),
 				l("div", rm, [
 					l("button", {
 						class: "act-btn isolate",
-						onClick: V,
-						title: "Simulated — updates this visualization only, does not control the real device"
-					}, "Isolate"),
+						title: "Simulated — updates this visualization only, does not control the real device",
+						onClick: V
+					}, " Isolate "),
 					l("button", {
 						class: "act-btn recover",
-						onClick: H,
-						title: "Simulated — updates this visualization only, does not control the real device"
-					}, "Recover"),
+						title: "Simulated — updates this visualization only, does not control the real device",
+						onClick: H
+					}, " Recover "),
 					l("button", {
 						class: "act-btn ack",
 						onClick: n[6] ||= (e) => M.value?.operatorState?.acknowledged ? ee() : U()
@@ -11536,7 +11539,7 @@ var Sf = {
 						key: 0,
 						class: "act-btn unmap",
 						onClick: re
-					}, "Remove from map")) : s("", !0)
+					}, " Remove from map ")) : s("", !0)
 				]),
 				l("div", im, [N(l("input", {
 					"onUpdate:modelValue": n[7] ||= (e) => D.value = e,
@@ -11550,7 +11553,7 @@ var Sf = {
 			])) : s("", !0)
 		])])) : s("", !0);
 	}
-}), [["__scopeId", "data-v-3a147b72"]]), sm = {
+}), [["__scopeId", "data-v-37024d5c"]]), sm = {
 	key: 0,
 	class: "panel"
 }, cm = { class: "panel-head" }, lm = { class: "link-title" }, um = { class: "link-type" }, dm = { class: "link-src" }, fm = { class: "panel-body" }, pm = { class: "section" }, mm = { class: "info-grid" }, hm = { class: "v" }, gm = { class: "v" }, _m = { class: "v" }, vm = { class: "v" }, ym = { class: "v" }, bm = {
@@ -11589,38 +11592,33 @@ var Sf = {
 			l("span", { class: g(["status-dot", a.value.status]) }, null, 2),
 			l("button", {
 				class: "close-btn",
-				onClick: t[0] ||= (e) => E(n).select(null),
-				title: "Close"
-			}, "✕")
-		])]), l("div", fm, [l("section", pm, [t[15] ||= l("div", { class: "sec-title" }, "Link Info", -1), l("div", mm, [
+				title: "Close",
+				onClick: t[0] ||= (e) => E(n).select(null)
+			}, " ✕ ")
+		])]), l("div", fm, [l("section", pm, [t[10] ||= l("div", { class: "sec-title" }, "Link Info", -1), l("div", mm, [
 			t[3] ||= l("span", { class: "k" }, "Type", -1),
-			t[4] ||= d(),
 			l("span", hm, T(r[a.value.type]), 1),
-			t[5] ||= l("span", { class: "k" }, "Status", -1),
-			t[6] ||= d(),
+			t[4] ||= l("span", { class: "k" }, "Status", -1),
 			l("span", { class: g(["v", `s-${a.value.status}`]) }, T(a.value.status ?? "unknown"), 3),
-			t[7] ||= l("span", { class: "k" }, "Source", -1),
-			t[8] ||= d(),
+			t[5] ||= l("span", { class: "k" }, "Source", -1),
+			t[6] ||= d(),
 			l("span", gm, T(a.value.source), 1),
-			t[9] ||= l("span", { class: "k" }, "Confidence", -1),
-			t[10] ||= d(),
+			t[7] ||= l("span", { class: "k" }, "Confidence", -1),
 			l("span", _m, T(a.value.confidence ?? "—"), 1),
-			t[11] ||= l("span", { class: "k" }, "Bandwidth", -1),
-			t[12] ||= d(),
+			t[8] ||= l("span", { class: "k" }, "Bandwidth", -1),
 			l("span", vm, T(a.value.bandwidth ? a.value.bandwidth + " Mbps" : "—"), 1),
-			t[13] ||= l("span", { class: "k" }, "Label", -1),
-			t[14] ||= d(),
+			t[9] ||= l("span", { class: "k" }, "Label", -1),
 			l("span", ym, T(a.value.label ?? "—"), 1)
-		])]), E(n).mode === "edit" && a.value.source === "manual" ? (b(), c("section", bm, [t[19] ||= l("div", { class: "sec-title" }, "Edit", -1), l("div", xm, [
-			l("label", null, [t[17] ||= d("Status ", -1), N(l("select", {
+		])]), E(n).mode === "edit" && a.value.source === "manual" ? (b(), c("section", bm, [t[14] ||= l("div", { class: "sec-title" }, "Edit", -1), l("div", xm, [
+			l("label", null, [t[12] ||= d("Status ", -1), N(l("select", {
 				"onUpdate:modelValue": t[1] ||= (e) => m.value = e,
 				class: "sel"
-			}, [...t[16] ||= [
+			}, [...t[11] ||= [
 				l("option", { value: "up" }, "Up", -1),
 				l("option", { value: "down" }, "Down", -1),
 				l("option", { value: "unknown" }, "Unknown", -1)
 			]], 512), [[k, m.value]])]),
-			l("label", null, [t[18] ||= d("Label ", -1), N(l("input", {
+			l("label", null, [t[13] ||= d("Label ", -1), N(l("input", {
 				"onUpdate:modelValue": t[2] ||= (e) => h.value = e,
 				class: "inp"
 			}, null, 512), [[A, h.value]])]),
@@ -11634,7 +11632,7 @@ var Sf = {
 			}, "Delete")
 		])])) : s("", !0)])])) : s("", !0);
 	}
-}), [["__scopeId", "data-v-1f2f1ef4"]]), Cm = {
+}), [["__scopeId", "data-v-6e80502d"]]), Cm = {
 	key: 0,
 	class: "panel"
 }, wm = { class: "panel-head" }, Tm = { class: "kind-tag" }, Em = { class: "sp-name" }, Dm = { class: "panel-body" }, Om = {
@@ -11683,11 +11681,11 @@ var Sf = {
 			l("span", Em, T(a.value.name), 1),
 			l("button", {
 				class: "close-btn",
-				onClick: t[0] ||= (e) => E(n).select(null),
-				title: "Close"
-			}, "✕")
+				title: "Close",
+				onClick: t[0] ||= (e) => E(n).select(null)
+			}, " ✕ ")
 		]), l("div", Dm, [
-			E(n).mode === "edit" ? (b(), c("section", Om, [t[10] ||= l("div", { class: "sec-title" }, "Info", -1), l("div", km, [
+			E(n).mode === "edit" ? (b(), c("section", Om, [t[9] ||= l("div", { class: "sec-title" }, "Info", -1), l("div", km, [
 				t[4] ||= l("span", { class: "k" }, "Kind", -1),
 				t[5] ||= d(),
 				l("span", Am, T(a.value.kind), 1),
@@ -11695,24 +11693,23 @@ var Sf = {
 				t[7] ||= d(),
 				l("span", jm, T(a.value.type), 1),
 				t[8] ||= l("span", { class: "k" }, "Devices", -1),
-				t[9] ||= d(),
 				l("span", Mm, T(o.value), 1)
 			])])) : s("", !0),
-			l("section", Nm, [t[11] ||= l("div", { class: "sec-title" }, "Name", -1), N(l("input", {
+			l("section", Nm, [t[10] ||= l("div", { class: "sec-title" }, "Name", -1), N(l("input", {
 				"onUpdate:modelValue": t[1] ||= (e) => u.value = e,
 				class: "inp",
 				onChange: h
 			}, null, 544), [[A, u.value]])]),
 			E(n).mode === "edit" && a.value.size ? (b(), c("section", Pm, [
-				t[14] ||= l("div", { class: "sec-title" }, "Size", -1),
+				t[13] ||= l("div", { class: "sec-title" }, "Size", -1),
 				l("div", Fm, [
-					t[12] ||= l("span", { class: "s-label" }, "Width", -1),
+					t[11] ||= l("span", { class: "s-label" }, "Width", -1),
 					N(l("input", {
+						"onUpdate:modelValue": t[2] ||= (e) => f.value = e,
 						type: "range",
 						min: m.value.min,
 						max: m.value.max,
 						step: "0.5",
-						"onUpdate:modelValue": t[2] ||= (e) => f.value = e,
 						class: "slider",
 						onInput: g
 					}, null, 40, Im), [[
@@ -11724,13 +11721,13 @@ var Sf = {
 					l("span", Lm, T(f.value.toFixed(1)), 1)
 				]),
 				l("div", Rm, [
-					t[13] ||= l("span", { class: "s-label" }, "Depth", -1),
+					t[12] ||= l("span", { class: "s-label" }, "Depth", -1),
 					N(l("input", {
+						"onUpdate:modelValue": t[3] ||= (e) => p.value = e,
 						type: "range",
 						min: m.value.min,
 						max: m.value.max,
 						step: "0.5",
-						"onUpdate:modelValue": t[3] ||= (e) => p.value = e,
 						class: "slider",
 						onInput: g
 					}, null, 40, zm), [[
@@ -11748,7 +11745,7 @@ var Sf = {
 			}, "Archive space")])) : s("", !0)
 		])])) : s("", !0);
 	}
-}), [["__scopeId", "data-v-9d0ae939"]]), Um = { class: "sv-panel" }, Wm = { class: "sv-head" }, Gm = {
+}), [["__scopeId", "data-v-eab16356"]]), Um = { class: "sv-panel" }, Wm = { class: "sv-head" }, Gm = {
 	key: 0,
 	class: "sv-empty"
 }, Km = { class: "sv-list" }, qm = ["onClick"], Jm = { class: "sv-name" }, Ym = { class: "sv-time" }, Xm = ["onClick"], Zm = /* @__PURE__ */ $(/* @__PURE__ */ p({
@@ -11768,9 +11765,9 @@ var Sf = {
 				n[1] ||= l("span", null, "Saved Views", -1),
 				l("button", {
 					class: "sv-save",
-					onClick: o,
-					title: "Save current view"
-				}, "Save Current"),
+					title: "Save current view",
+					onClick: o
+				}, " Save Current "),
 				l("button", {
 					class: "icon-btn",
 					onClick: n[0] ||= (e) => E(i).showSavedViews = !1
@@ -11786,10 +11783,10 @@ var Sf = {
 			}, [l("div", Jm, T(e.name), 1), l("div", Ym, T(e.createdAt), 1)], 8, qm), l("button", {
 				class: "del-btn",
 				onClick: (t) => E(r).removeSavedView(e.id)
-			}, "✕", 8, Xm)]))), 128))])
+			}, " ✕ ", 8, Xm)]))), 128))])
 		]));
 	}
-}), [["__scopeId", "data-v-2125ec23"]]), Qm = { class: "cl-panel" }, $m = { class: "cl-head" }, eh = {
+}), [["__scopeId", "data-v-d71a8612"]]), Qm = { class: "cl-panel" }, $m = { class: "cl-head" }, eh = {
 	key: 0,
 	class: "cl-empty"
 }, th = { class: "cl-list" }, nh = { class: "cl-msg" }, rh = { class: "cl-ts" }, ih = /* @__PURE__ */ $(/* @__PURE__ */ p({
@@ -11813,7 +11810,7 @@ var Sf = {
 				N(l("select", {
 					"onUpdate:modelValue": i[0] ||= (e) => a.value = e,
 					class: "cl-filter"
-				}, [...i[3] ||= [u("<option value=\"\" data-v-3087e6a1>All types</option><option value=\"device\" data-v-3087e6a1>Device</option><option value=\"space\" data-v-3087e6a1>Space</option><option value=\"link\" data-v-3087e6a1>Link</option><option value=\"other\" data-v-3087e6a1>Other</option>", 5)]], 512), [[k, a.value]]),
+				}, [...i[3] ||= [u("<option value=\"\" data-v-5d4f107f>All types</option><option value=\"device\" data-v-5d4f107f>Device</option><option value=\"space\" data-v-5d4f107f>Space</option><option value=\"link\" data-v-5d4f107f>Link</option><option value=\"other\" data-v-5d4f107f>Other</option>", 5)]], 512), [[k, a.value]]),
 				l("button", {
 					class: "cl-clear",
 					onClick: f
@@ -11821,7 +11818,7 @@ var Sf = {
 				l("button", {
 					class: "cl-clear",
 					onClick: i[1] ||= (e) => E(n).changeLog.splice(0)
-				}, "Clear"),
+				}, " Clear "),
 				l("button", {
 					class: "icon-btn",
 					onClick: i[2] ||= (e) => E(r).showChangeLog = !1
@@ -11838,7 +11835,7 @@ var Sf = {
 			]))), 128))])
 		]));
 	}
-}), [["__scopeId", "data-v-3087e6a1"]]), ah = { class: "vn-panel" }, oh = { class: "vn-head" }, sh = { class: "vn-list" }, ch = ["onClick"], lh = { class: "vn-tag" }, uh = { class: "vn-label" }, dh = ["onClick"], fh = {
+}), [["__scopeId", "data-v-5d4f107f"]]), ah = { class: "vn-panel" }, oh = { class: "vn-head" }, sh = { class: "vn-list" }, ch = ["onClick"], lh = { class: "vn-tag" }, uh = { class: "vn-label" }, dh = ["onClick"], fh = {
 	key: 0,
 	class: "vn-empty"
 }, ph = {
@@ -11877,11 +11874,11 @@ var Sf = {
 					key: 0,
 					class: "text-btn",
 					onClick: r[0] ||= (e) => d.value = !d.value
-				}, "Add")) : s("", !0),
+				}, " Add ")) : s("", !0),
 				l("button", {
 					class: "text-btn",
 					onClick: r[1] ||= (e) => E(o).showVirtualNodes = !1
-				}, "Close")
+				}, " Close ")
 			]),
 			l("div", sh, [(b(!0), c(e, null, C(h.value, (e) => (b(), c("div", {
 				key: e.id,
@@ -11894,7 +11891,7 @@ var Sf = {
 					key: 0,
 					class: "del-btn",
 					onClick: F((t) => _(e.id), ["stop"])
-				}, "x", 8, dh)) : s("", !0)
+				}, " x ", 8, dh)) : s("", !0)
 			], 8, ch))), 128)), h.value.length ? s("", !0) : (b(), c("div", fh, "No virtual nodes"))]),
 			f(n, { name: "fade" }, {
 				default: M(() => [E(o).mode === "edit" && d.value ? (b(), c("div", ph, [
@@ -11922,7 +11919,7 @@ var Sf = {
 			})
 		]));
 	}
-}), [["__scopeId", "data-v-9b02530a"]]), hh = {
+}), [["__scopeId", "data-v-55d9d90c"]]), hh = {
 	key: 0,
 	class: "tl-panel"
 }, gh = { class: "tl-head" }, _h = {
@@ -11993,19 +11990,19 @@ var Sf = {
 				t[3] ||= l("div", { class: "tl-spacer" }, null, -1),
 				l("button", {
 					class: "tl-btn",
-					onClick: v,
-					title: "Export timeline"
-				}, "Export Timeline"),
+					title: "Export timeline",
+					onClick: v
+				}, " Export Timeline "),
 				l("button", {
 					class: "tl-btn",
-					onClick: y,
-					title: "Export layout"
-				}, "Export Layout"),
+					title: "Export layout",
+					onClick: y
+				}, " Export Layout "),
 				l("button", {
 					class: "tl-btn",
-					onClick: x,
-					title: "Import layout"
-				}, "Import Layout"),
+					title: "Import layout",
+					onClick: x
+				}, " Import Layout "),
 				l("input", {
 					ref_key: "fileInput",
 					ref: u,
@@ -12022,11 +12019,11 @@ var Sf = {
 			p.value > 0 ? (b(), c("div", vh, [
 				t[4] ||= l("span", { class: "tl-label" }, "LIVE", -1),
 				N(l("input", {
+					"onUpdate:modelValue": t[1] ||= (e) => E(a).timelineFrameIdx = e,
 					type: "range",
 					min: "-1",
 					max: p.value - 1,
 					step: "1",
-					"onUpdate:modelValue": t[1] ||= (e) => E(a).timelineFrameIdx = e,
 					class: "tl-slider",
 					onInput: _
 				}, null, 40, yh), [[
@@ -12042,10 +12039,10 @@ var Sf = {
 				onClick: t[2] ||= (e) => {
 					E(a).timelineFrameIdx = -1, r("live");
 				}
-			}, "Back to LIVE")])) : s("", !0)
+			}, " Back to LIVE ")])) : s("", !0)
 		])) : s("", !0);
 	}
-}), [["__scopeId", "data-v-b46656aa"]]), Ch = class {
+}), [["__scopeId", "data-v-5f858352"]]), Ch = class {
 	canvas;
 	ctx;
 	bounds = {
@@ -12155,11 +12152,11 @@ var Sf = {
 			onClick: d
 		}, null, 512), l("button", {
 			class: "mm-close",
-			onClick: t[0] ||= (e) => E(i).showMinimap = !1,
-			title: "Close minimap"
-		}, "✕")])) : s("", !0);
+			title: "Close minimap",
+			onClick: t[0] ||= (e) => E(i).showMinimap = !1
+		}, " ✕ ")])) : s("", !0);
 	}
-}), [["__scopeId", "data-v-c605211a"]]), Oh = {
+}), [["__scopeId", "data-v-63bba14a"]]), Oh = {
 	class: "camera-tools",
 	"aria-label": "Camera controls"
 }, kh = ["aria-pressed"], Ah = ["aria-pressed"], jh = { class: "zoom-controls" }, Mh = ["disabled"], Nh = ["aria-expanded"], Ph = {
@@ -12218,40 +12215,40 @@ var Sf = {
 			l("nav", Oh, [
 				t[7] ||= l("span", { class: "camera-caption" }, "NAVIGATE", -1),
 				l("button", {
-					onClick: t[0] ||= (...e) => E(D) && E(D)(...e),
-					title: "Reset camera (F)"
+					title: "Reset camera (F)",
+					onClick: t[0] ||= (...e) => E(D) && E(D)(...e)
 				}, "Reset view"),
 				l("button", {
-					onClick: t[1] ||= (e) => E(A)("top"),
 					"aria-pressed": N.value === "top",
-					title: "Look down at the current area"
-				}, "Top view", 8, kh),
+					title: "Look down at the current area",
+					onClick: t[1] ||= (e) => E(A)("top")
+				}, " Top view ", 8, kh),
 				l("button", {
-					onClick: t[2] ||= (e) => E(A)("perspective"),
 					"aria-pressed": N.value === "perspective",
-					title: "View the current area in 3D"
-				}, "3D view", 8, Ah),
+					title: "View the current area in 3D",
+					onClick: t[2] ||= (e) => E(A)("perspective")
+				}, " 3D view ", 8, Ah),
 				l("div", jh, [l("button", {
-					onClick: t[3] ||= (e) => E(k)(.8),
 					"aria-label": "Zoom in",
-					title: "Zoom in"
-				}, "+"), l("button", {
-					onClick: t[4] ||= (e) => E(k)(1.25),
+					title: "Zoom in",
+					onClick: t[3] ||= (e) => E(k)(.8)
+				}, " + "), l("button", {
 					"aria-label": "Zoom out",
-					title: "Zoom out"
-				}, "−")]),
+					title: "Zoom out",
+					onClick: t[4] ||= (e) => E(k)(1.25)
+				}, " − ")]),
 				l("button", {
 					disabled: !E(m).selectedDeviceId,
-					onClick: L,
-					title: "Move closer to the selected device"
-				}, "Focus selected", 8, Mh),
+					title: "Move closer to the selected device",
+					onClick: L
+				}, " Focus selected ", 8, Mh),
 				l("button", {
 					"aria-expanded": I.value,
 					"aria-controls": "navigation-help",
 					onClick: t[5] ||= (e) => I.value = !I.value
-				}, "Controls guide", 8, Nh)
+				}, " Controls guide ", 8, Nh)
 			]),
-			I.value ? (b(), c("div", Ph, [t[8] ||= u("<strong data-v-df4a69f6>Explore your topology</strong><dl data-v-df4a69f6><dt data-v-df4a69f6>Rotate</dt><dd data-v-df4a69f6>Left-drag empty space</dd><dt data-v-df4a69f6>Pan</dt><dd data-v-df4a69f6>Right-drag / Ctrl + drag</dd><dt data-v-df4a69f6>Zoom</dt><dd data-v-df4a69f6>Scroll / pinch</dd><dt data-v-df4a69f6>Inspect</dt><dd data-v-df4a69f6>Click a device</dd><dt data-v-df4a69f6>Touch</dt><dd data-v-df4a69f6>One finger rotates; two fingers pan</dd></dl>", 2), l("p", null, T(E(m).mode === "edit" ? "Move selected devices with the colored arrows. Esc cancels a connection." : "Switch to Edit to move devices or create connections."), 1)])) : s("", !0),
+			I.value ? (b(), c("div", Ph, [t[8] ||= u("<strong data-v-3e106f99>Explore your topology</strong><dl data-v-3e106f99><dt data-v-3e106f99>Rotate</dt><dd data-v-3e106f99>Left-drag empty space</dd><dt data-v-3e106f99>Pan</dt><dd data-v-3e106f99>Right-drag / Ctrl + drag</dd><dt data-v-3e106f99>Zoom</dt><dd data-v-3e106f99>Scroll / pinch</dd><dt data-v-3e106f99>Inspect</dt><dd data-v-3e106f99>Click a device</dd><dt data-v-3e106f99>Touch</dt><dd data-v-3e106f99>One finger rotates; two fingers pan</dd></dl>", 2), l("p", null, T(E(m).mode === "edit" ? "Move selected devices with the colored arrows. Esc cancels a connection." : "Switch to Edit to move devices or create connections."), 1)])) : s("", !0),
 			f(n, { name: "fade" }, {
 				default: M(() => [B.value.visible && V.value ? (b(), c("div", {
 					key: 0,
@@ -12281,14 +12278,14 @@ var Sf = {
 				d(" from one device to another, then pick a link type · ", -1),
 				l("kbd", null, "ESC", -1),
 				d(" to cancel ", -1)
-			]])) : E(m).mode === "edit" ? (b(), c("div", zh, [...t[10] ||= [u(" Click to select · <kbd data-v-df4a69f6>Ctrl</kbd>+Click multi-select · drag <span style=\"color:#ff6b7a;\" data-v-df4a69f6>X</span>/<span style=\"color:#5fd968;\" data-v-df4a69f6>Y</span>/<span style=\"color:#5fb0ff;\" data-v-df4a69f6>Z</span> arrows to move · <kbd data-v-df4a69f6>L</kbd> Connect · <kbd data-v-df4a69f6>Del</kbd> Delete · <kbd data-v-df4a69f6>Ctrl+Z</kbd> Undo · <kbd data-v-df4a69f6>F</kbd> Fit ", 17)]])) : (b(), c("div", Bh, [...t[11] ||= [
+			]])) : E(m).mode === "edit" ? (b(), c("div", zh, [...t[10] ||= [u(" Click to select · <kbd data-v-3e106f99>Ctrl</kbd>+Click multi-select · drag <span style=\"color:#ff6b7a;\" data-v-3e106f99>X</span>/<span style=\"color:#5fd968;\" data-v-3e106f99>Y</span>/<span style=\"color:#5fb0ff;\" data-v-3e106f99>Z</span> arrows to move · <kbd data-v-3e106f99>L</kbd> Connect · <kbd data-v-3e106f99>Del</kbd> Delete · <kbd data-v-3e106f99>Ctrl+Z</kbd> Undo · <kbd data-v-3e106f99>F</kbd> Fit ", 17)]])) : (b(), c("div", Bh, [...t[11] ||= [
 				d(" View mode - click to inspect - ", -1),
 				l("kbd", null, "F", -1),
 				d(" Fit ", -1)
 			]]))
 		], 544));
 	}
-}), [["__scopeId", "data-v-df4a69f6"]]), Hh = 220, Uh = 16, Wh = 22, Gh = 56;
+}), [["__scopeId", "data-v-3e106f99"]]), Hh = 220, Uh = 16, Wh = 22, Gh = 56;
 function Kh(e, t) {
 	return e > 0 ? Mn.critical : t > 0 ? Mn.warning : Mn.normal;
 }
@@ -12426,9 +12423,9 @@ var qh = class {
 		}), j(m, () => g(), { deep: !0 }), j(Mn, () => g()), v(() => {
 			d?.disconnect();
 		}), (e, t) => (b(), c("div", {
-			class: "ov-wrap",
 			ref_key: "wrapper",
-			ref: a
+			ref: a,
+			class: "ov-wrap"
 		}, [l("canvas", {
 			ref_key: "canvas",
 			ref: o,
@@ -12438,7 +12435,7 @@ var qh = class {
 			onMouseleave: C
 		}, null, 544), m.value.length ? s("", !0) : (b(), c("div", Jh, "No spaces yet"))], 512));
 	}
-}), [["__scopeId", "data-v-79e35044"]]), Xh = { class: "offscreen-alerts" }, Zh = ["title", "onClick"], Qh = /* @__PURE__ */ $(/* @__PURE__ */ p({
+}), [["__scopeId", "data-v-15d5686d"]]), Xh = { class: "offscreen-alerts" }, Zh = ["title", "onClick"], Qh = /* @__PURE__ */ $(/* @__PURE__ */ p({
 	__name: "OffscreenAlertOverlay",
 	setup(t) {
 		let n = J(), r = q(), { focusDevice: i } = ru();
@@ -12464,9 +12461,9 @@ var qh = class {
 			}),
 			title: a(e.id),
 			onClick: (t) => o(e.id)
-		}, "▲", 14, Zh))), 128))]));
+		}, " ▲ ", 14, Zh))), 128))]));
 	}
-}), [["__scopeId", "data-v-35c1929c"]]), $h = ["onClick"], eg = /* @__PURE__ */ $(/* @__PURE__ */ p({
+}), [["__scopeId", "data-v-e173f801"]]), $h = ["onClick"], eg = /* @__PURE__ */ $(/* @__PURE__ */ p({
 	__name: "ContextMenu",
 	setup(r) {
 		let i = J(), { confirmCreateLink: a } = ru(), u = [
@@ -12533,12 +12530,12 @@ var qh = class {
 				l("button", {
 					class: "ctx-item cancel",
 					onClick: a[0] ||= (e) => E(i).hideContextMenu()
-				}, "Cancel")
+				}, " Cancel ")
 			], 4)) : s("", !0)]),
 			_: 1
 		})]));
 	}
-}), [["__scopeId", "data-v-fcf03e39"]]), tg = { class: "toast-stack" }, ng = ["onClick"], rg = { class: "msg" }, ig = /* @__PURE__ */ $(/* @__PURE__ */ p({
+}), [["__scopeId", "data-v-65f97b96"]]), tg = { class: "toast-stack" }, ng = ["onClick"], rg = { class: "msg" }, ig = /* @__PURE__ */ $(/* @__PURE__ */ p({
 	__name: "ToastPanel",
 	setup(n) {
 		let i = J();
@@ -12551,7 +12548,7 @@ var qh = class {
 			_: 1
 		})])]));
 	}
-}), [["__scopeId", "data-v-0b13ee6c"]]), ag = { class: "help-modal" }, og = { class: "help-head" }, sg = { class: "lang-switch" }, cg = { class: "help-body" }, lg = { class: "help-key" }, ug = { class: "help-desc" }, dg = /* @__PURE__ */ $(/* @__PURE__ */ p({
+}), [["__scopeId", "data-v-754a9a76"]]), ag = { class: "help-modal" }, og = { class: "help-head" }, sg = { class: "lang-switch" }, cg = { class: "help-body" }, lg = { class: "help-key" }, ug = { class: "help-desc" }, dg = /* @__PURE__ */ $(/* @__PURE__ */ p({
 	__name: "HelpPanel",
 	setup(r) {
 		let i = J(), a = S("en"), u = {
@@ -12822,7 +12819,7 @@ var qh = class {
 			_: 1
 		})]));
 	}
-}), [["__scopeId", "data-v-6518091b"]]), fg = {
+}), [["__scopeId", "data-v-ca702e8b"]]), fg = {
 	server: "server",
 	srv: "server",
 	host: "server",
@@ -13090,7 +13087,7 @@ var Cg = { class: "imp-modal" }, wg = { class: "imp-body" }, Tg = { class: "imp-
 			l("button", {
 				class: "text-btn",
 				onClick: k
-			}, "Download CSV template"),
+			}, " Download CSV template "),
 			l("button", {
 				class: "text-btn",
 				onClick: y
@@ -13115,7 +13112,7 @@ var Cg = { class: "imp-modal" }, wg = { class: "imp-body" }, Tg = { class: "imp-
 					l("button", {
 						class: "pick-btn",
 						onClick: i[0] ||= (e) => u.value?.click()
-					}, "Choose CSV / XLSX"),
+					}, " Choose CSV / XLSX "),
 					i[5] ||= l("span", { class: "drop-hint" }, "or drop a file here", -1),
 					f.value ? (b(), c("span", Eg, T(f.value) + " · " + T(m.value?.rows.length ?? 0) + " rows", 1)) : s("", !0)
 				], 34),
@@ -13156,7 +13153,7 @@ var Cg = { class: "imp-modal" }, wg = { class: "imp-body" }, Tg = { class: "imp-
 				m.value.errors.length ? (b(), c("div", Og, [(b(!0), c(e, null, C(m.value.errors.slice(0, 5), (e, t) => (b(), c("div", {
 					key: t,
 					class: "err-line"
-				}, T(e), 1))), 128)), m.value.errors.length > 5 ? (b(), c("div", kg, "… and " + T(m.value.errors.length - 5) + " more", 1)) : s("", !0)])) : s("", !0),
+				}, T(e), 1))), 128)), m.value.errors.length > 5 ? (b(), c("div", kg, " … and " + T(m.value.errors.length - 5) + " more ", 1)) : s("", !0)])) : s("", !0),
 				m.value.warnings.length ? (b(), c("div", Ag, [(b(!0), c(e, null, C(m.value.warnings, (e, t) => (b(), c("div", {
 					key: t,
 					class: "warn-line"
@@ -13186,8 +13183,8 @@ var Cg = { class: "imp-modal" }, wg = { class: "imp-body" }, Tg = { class: "imp-
 			m.value && m.value.rows.length ? (b(), c("section", Pg, [
 				i[11] ||= l("div", { class: "step-title" }, "3. Import options", -1),
 				l("label", Fg, [N(l("input", {
-					type: "checkbox",
-					"onUpdate:modelValue": i[3] ||= (e) => _.value = e
+					"onUpdate:modelValue": i[3] ||= (e) => _.value = e,
+					type: "checkbox"
 				}, null, 512), [[D, _.value]]), i[10] ||= l("span", null, "Replace current scene (clear existing devices, spaces, links)", -1)]),
 				E(r).mode === "edit" ? s("", !0) : (b(), c("div", Ig, " Switch to Edit mode before importing topology data. ")),
 				l("button", {
@@ -13198,7 +13195,7 @@ var Cg = { class: "imp-modal" }, wg = { class: "imp-body" }, Tg = { class: "imp-
 			])) : s("", !0)
 		])])])) : s("", !0)]));
 	}
-}), [["__scopeId", "data-v-12a6c42e"]]), zg = {
+}), [["__scopeId", "data-v-3ad773c9"]]), zg = {
 	key: 0,
 	class: "vs-wrap"
 }, Bg = { class: "vs-crumb" }, Vg = /* @__PURE__ */ $(/* @__PURE__ */ p({
@@ -13218,11 +13215,11 @@ var Cg = { class: "imp-modal" }, wg = { class: "imp-body" }, Tg = { class: "imp-
 		});
 		return (e, n) => o.value ? (b(), c("div", zg, [l("span", Bg, T(u.value), 1), l("button", {
 			class: "vs-btn",
-			onClick: n[0] ||= (e) => E(t).showOverview(),
-			title: "Back to campus overview"
+			title: "Back to campus overview",
+			onClick: n[0] ||= (e) => E(t).showOverview()
 		}, " 🗺 Campus ")])) : s("", !0);
 	}
-}), [["__scopeId", "data-v-22d629ce"]]), Hg = ["aria-expanded"], Ug = { "aria-hidden": "true" }, Wg = {
+}), [["__scopeId", "data-v-c1dcb0ba"]]), Hg = ["aria-expanded"], Ug = { "aria-hidden": "true" }, Wg = {
 	key: 0,
 	class: "legend-body"
 }, Gg = ["data-status"], Kg = ["aria-pressed"], qg = {
@@ -13289,12 +13286,12 @@ var Cg = { class: "imp-modal" }, wg = { class: "imp-body" }, Tg = { class: "imp-
 			}, null, 4)), 64))]), d(" " + T(E(n).colorblindMode ? "Colorblind palette on" : "Standard palette"), 1)], 8, Kg)
 		], 512));
 	}
-}), [["__scopeId", "data-v-39d5a506"]]), Yg = { class: "app" }, Xg = { class: "workspace" }, Zg = {
+}), [["__scopeId", "data-v-b61e96b3"]]), Yg = { class: "app" }, Xg = { class: "workspace" }, Zg = {
 	key: 0,
 	class: "left-dock"
 }, Qg = {
-	class: "canvas-wrap",
-	ref: "canvasWrap"
+	ref: "canvasWrap",
+	class: "canvas-wrap"
 }, $g = {
 	key: 1,
 	class: "right-dock"
@@ -13382,13 +13379,13 @@ var Cg = { class: "imp-modal" }, wg = { class: "imp-body" }, Tg = { class: "imp-
 						onClick: r[1] ||= (e) => {
 							E(t).blastSourceId = null, E(t).select(null);
 						}
-					}, "Close")
+					}, " Close ")
 				])) : s("", !0)]),
 				_: 1
 			})
 		]));
 	}
-}), [["__scopeId", "data-v-c3001058"]]);
+}), [["__scopeId", "data-v-c28a277b"]]);
 //#endregion
 //#region src/index.ts
 function r_(e) {

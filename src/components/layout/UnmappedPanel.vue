@@ -7,12 +7,12 @@
       <button
         v-if="ui.mode === 'edit'"
         class="text-btn"
-        @click="showAdd = !showAdd"
         title="Add device manually"
+        @click="showAdd = !showAdd"
       >
         Add
       </button>
-      <button class="close-btn" @click="ui.closeLeftDock()" title="Close">
+      <button class="close-btn" title="Close" @click="ui.closeLeftDock()">
         ✕
       </button>
     </div>
@@ -68,12 +68,12 @@
         :key="dev.id"
         class="dev-row"
         :draggable="ui.mode === 'edit'"
-        @dragstart="onDragStart($event, dev.id)"
-        @dragend="onDragEnd"
         :class="{
           dragging: draggingId === dev.id,
           readonly: ui.mode !== 'edit',
         }"
+        @dragstart="onDragStart($event, dev.id)"
+        @dragend="onDragEnd"
       >
         <span
           class="type-tag"
@@ -92,8 +92,8 @@
         <button
           v-if="ui.mode === 'edit'"
           class="ignore-btn"
-          @click.stop="ignoreDevice(dev.id)"
           title="Ignore"
+          @click.stop="ignoreDevice(dev.id)"
         >
           ✕
         </button>

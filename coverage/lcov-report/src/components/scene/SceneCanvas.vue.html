@@ -1,0 +1,661 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/components/scene/SceneCanvas.vue</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">src/components/scene</a> SceneCanvas.vue</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/41</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/55</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/16</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/36</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">&lt;template&gt;
+<span class="cstat-no" title="statement not covered" >  &lt;div</span>
+ref="wrapper" class="scene-wrap"
+    @dragover<span class="fstat-no" title="function not covered" >.prevent</span>
+    @drop="onDrop"
+  &gt;
+    &lt;canvas <span class="cstat-no" title="statement not covered" >ref="canvas" /&gt;</span>
+    &lt;div ref="overlay" class="html-overlay" /&gt;
+&nbsp;
+    &lt;nav class="camera-tools" aria-label="Camera controls"&gt;
+      &lt;span class="camera-caption"&gt;NAVIGATE&lt;/span&gt;
+      &lt;button title="Reset camera (F)" @click<span class="fstat-no" title="function not covered" >="<span class="cstat-no" title="statement not covered" >r</span>esetCamera"&gt;R</span>eset view&lt;/button&gt;
+      &lt;button :aria-pressed="cameraView === 'top'" title="Look down at the current area" @click<span class="fstat-no" title="function not covered" >="<span class="cstat-no" title="statement not covered" >s</span>etCameraView('top')"&gt;T</span>op view&lt;/button&gt;
+      &lt;button :aria-pressed="cameraView === 'perspective'" title="View the current area in 3D" @click<span class="fstat-no" title="function not covered" >="<span class="cstat-no" title="statement not covered" >s</span>etCameraView('perspective')"&gt;3</span>D view&lt;/button&gt;
+      &lt;div <span class="cstat-no" title="statement not covered" >class="zoom-controls"&gt;</span>
+        &lt;button aria-label="Zoom in" title="Zoom in" @click<span class="fstat-no" title="function not covered" >="<span class="cstat-no" title="statement not covered" >z</span>oomCamera(0.8)"&gt;+</span>&lt;/button&gt;
+        &lt;button aria-label="Zoom out" title="Zoom out" @click<span class="fstat-no" title="function not covered" >="<span class="cstat-no" title="statement not covered" >z</span>oomCamera(1.25)"&gt;−</span>&lt;/button&gt;
+      &lt;/div&gt;
+      &lt;button :disabled="!ui.selectedDeviceId" title="Move closer to the selected device" @click="focusSelected"&gt;Focus selected&lt;/button&gt;
+      &lt;button :aria-expanded="showNavigationHelp" aria-controls="navigation-help" @click<span class="fstat-no" title="function not covered" >="<span class="cstat-no" title="statement not covered" >s</span>howNavigationHelp = !showNavigationHelp"&gt;C</span>ontrols guide&lt;/button&gt;
+    &lt;/nav&gt;
+    &lt;div v-if="showNavigationHelp" id="navigation-help" class="navigation-help"&gt;
+      &lt;strong&gt;Explore your topology&lt;/strong&gt;
+      &lt;dl&gt;
+        &lt;dt&gt;Rotate&lt;/dt&gt;&lt;dd&gt;Left-drag empty space&lt;/dd&gt;
+        &lt;dt&gt;Pan&lt;/dt&gt;&lt;dd&gt;Right-drag / Ctrl + drag&lt;/dd&gt;
+        &lt;dt&gt;Zoom&lt;/dt&gt;&lt;dd&gt;Scroll / pinch&lt;/dd&gt;
+        &lt;dt&gt;Inspect&lt;/dt&gt;&lt;dd&gt;Click a device&lt;/dd&gt;
+        &lt;dt&gt;Touch&lt;/dt&gt;&lt;dd&gt;One finger rotates; two fingers pan&lt;/dd&gt;
+      &lt;/dl&gt;
+      &lt;p&gt;{{ ui.mode === 'edit' ? 'Move selected devices with the colored arrows. Esc cancels a connection.' : 'Switch to Edit to move devices or create connections.' }}&lt;/p&gt;
+    &lt;/div&gt;
+&nbsp;
+    &lt;!-- hover tooltip --&gt;
+    &lt;Transition name="fade"&gt;
+      &lt;div
+        v-if="tooltip.visible &amp;&amp; <span class="branch-0 cbranch-no" title="branch not covered" >hovDev"</span>
+        class="tooltip"
+        :style="{ left: tooltip.x + 14 + 'px', top: tooltip.y - 10 + 'px' }"
+      &gt;
+        &lt;div <span class="cstat-no" title="statement not covered" >class="tt-name"&gt;{{ h</span>ovDev.hostname }}&lt;/div&gt;
+        &lt;div <span class="cstat-no" title="statement not covered" >class="tt-ip"&gt;{{ h</span>ovDev.ip }}&lt;/div&gt;
+        &lt;div class="tt-status" :style="{ color: STATUS_COLOR_HEX[hovDev.status ?? 'unknown'] }"&gt;
+          {{ STATUS_LABEL[hovDev.status ?? 'unknown'] }}
+        &lt;/div&gt;
+        &lt;div v-if="hovDev.metrics" class="tt-metrics"&gt;
+          C{{ (hovDev.metrics.cpu ?? 0).toFixed(0) }}%
+          M{{ (hovDev.metrics.memory ?? 0).toFixed(0) }}%
+        &lt;/div&gt;
+        &lt;div class="tt-type" :style="{ color: typeColor(hovDev.normalizedType) }"&gt;
+          {{ typeLabel(hovDev.normalizedType) }}
+        &lt;/div&gt;
+      &lt;/div&gt;<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ></span></span>
+    &lt;/Transition&gt;
+&nbsp;
+    &lt;div v-if="ui.linkToolActive" class="hint edit-hint"&gt;
+      Connect mode — &lt;b&gt;drag&lt;/b&gt; from one device to another, then pick a link type · &lt;kbd&gt;ESC&lt;/kbd&gt; to cancel
+    &lt;/div&gt;
+&nbsp;
+    &lt;div v-else-if="ui.mode === 'edit'" class="hint"&gt;
+      Click to select · &lt;kbd&gt;Ctrl&lt;/kbd&gt;+Click multi-select · drag
+      &lt;span style="color:#ff6b7a"&gt;X&lt;/span&gt;/&lt;span style="color:#5fd968"&gt;Y&lt;/span&gt;/&lt;span style="color:#5fb0ff"&gt;Z&lt;/span&gt;
+      arrows to move · &lt;kbd&gt;L&lt;/kbd&gt; Connect · &lt;kbd&gt;Del&lt;/kbd&gt; Delete · &lt;kbd&gt;Ctrl+Z&lt;/kbd&gt; Undo · &lt;kbd&gt;F&lt;/kbd&gt; Fit
+    &lt;/div&gt;
+&nbsp;
+    &lt;div v-else class="hint"&gt;
+      View mode - click to inspect - &lt;kbd&gt;F&lt;/kbd&gt; Fit
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+&nbsp;
+&lt;script setup lang="ts"&gt;
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useNmsEditor }   from '@/composables/useNmsEditor'
+import { useEditorStore } from '@/stores/editor'
+import { useUIStore }     from '@/stores/ui'
+import { STATUS_COLOR_HEX, STATUS_LABEL } from '@/utils/colorUtils'
+import { useDeviceTypeHelpers } from '@/composables/useDeviceTypeHelpers'
+&nbsp;
+const <span class="cstat-no" title="statement not covered" >wrapper = ref&lt;HTMLDivElement | null&gt;(null)</span>
+const <span class="cstat-no" title="statement not covered" >canvas  = ref&lt;HTMLCanvasElement | null&gt;(null)</span>
+const <span class="cstat-no" title="statement not covered" >overlay = ref&lt;HTMLDivElement | null&gt;(null)</span>
+&nbsp;
+const <span class="cstat-no" title="statement not covered" >editor = useEditorStore()</span>
+const <span class="cstat-no" title="statement not covered" >ui     = useUIStore()</span>
+const emit   = <span class="cstat-no" title="statement not covered" >defineEmits&lt;{ (e: 'scene-ready'): void }&gt;()</span>
+const { init, dispose, dropDeviceAt, resetCamera, focusDevice, zoomCamera, setCameraView, <span class="cstat-no" title="statement not covered" >getScene } = useNmsEditor()</span>
+const <span class="cstat-no" title="statement not covered" >cameraView = ref&lt;'top' | 'perspective'&gt;('perspective')</span>
+function <span class="fstat-no" title="function not covered" >syncCameraView() {</span>
+<span class="cstat-no" title="statement not covered" >  cameraView.value = getScene().controls.getPolarAngle() &lt; 0.1 ? 'top' : 'perspective'</span>
+}
+const <span class="cstat-no" title="statement not covered" >showNavigationHelp = ref(false)</span>
+function <span class="fstat-no" title="function not covered" >focusSelected() {</span>
+<span class="cstat-no" title="statement not covered" >  if (ui.selectedDeviceId) <span class="cstat-no" title="statement not covered" >focusDevice(ui.selectedDeviceId)</span></span>
+}
+const { typeColor, <span class="cstat-no" title="statement not covered" >typeLabel } = useDeviceTypeHelpers()</span>
+&nbsp;
+const <span class="cstat-no" title="statement not covered" >tooltip = <span class="fstat-no" title="function not covered" >computed(() =&gt; <span class="cstat-no" title="statement not covered" >u</span>i.tooltip)</span></span>
+const <span class="cstat-no" title="statement not covered" >hovDev  = <span class="fstat-no" title="function not covered" >computed(() =&gt; <span class="cstat-no" title="statement not covered" >u</span>i.tooltip.deviceId ? editor.devices.get(ui.tooltip.deviceId) : null)</span></span>
+&nbsp;
+function <span class="fstat-no" title="function not covered" >onDrop(e</span>: DragEvent) {
+  const deviceId = <span class="cstat-no" title="statement not covered" >e.dataTransfer?.getData('deviceId')</span>
+<span class="cstat-no" title="statement not covered" >  if (!deviceId) <span class="cstat-no" title="statement not covered" >return</span></span>
+<span class="cstat-no" title="statement not covered" >  dropDeviceAt(deviceId, e)</span>
+}
+&nbsp;
+<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >onMounted(() =&gt; {</span></span>
+<span class="cstat-no" title="statement not covered" >  init(canvas.value!, overlay.value!, wrapper.value!)</span>
+<span class="cstat-no" title="statement not covered" >  getScene().controls.addEventListener('change', syncCameraView)</span>
+<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >  nextTick(() =&gt; <span class="cstat-no" title="statement not covered" >e</span>mit('scene-ready'))</span></span>
+})
+<span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >onBeforeUnmount(() =&gt; {</span></span>
+<span class="cstat-no" title="statement not covered" >  getScene().controls.removeEventListener('change', syncCameraView)</span>
+<span class="cstat-no" title="statement not covered" >  dispose()</span>
+})
+&lt;/script&gt;
+&nbsp;
+&lt;style scoped&gt;
+.scene-wrap   { width: 100%; height: 100%; position: relative; overflow: hidden; }
+canvas        { width: 100%; height: 100%; display: block; }
+.camera-tools {
+  position: absolute; top: 16px; right: 16px; z-index: 130;
+  display: grid; gap: 5px; width: 136px; padding: 10px;
+  background: rgba(12, 22, 39, .94); border: 1px solid #30445f;
+  border-radius: 12px; box-shadow: 0 8px 28px #0005; backdrop-filter: blur(12px);
+}
+.camera-caption { color: #91a9c6; font-size: 10px; letter-spacing: .14em; padding: 3px 4px 6px; }
+.camera-tools button {
+  min-height: 34px; border: 1px solid #30445f; border-radius: 7px;
+  background: #17263b; color: #e2e8f0; cursor: pointer; font: inherit; font-size: 12px;
+}
+.camera-tools button:hover:not(:disabled) { background: #254568; border-color: #72b7ed; }
+.camera-tools button[aria-pressed='true'] { background: #254568; border-color: #7dd3fc; color: #e0f2fe; }
+.camera-tools button:disabled { opacity: .4; cursor: default; }
+.camera-tools button:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
+.zoom-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.zoom-controls button { font-size: 20px; }
+@container (max-height: 560px) {
+  .camera-tools { grid-template-columns: 1fr 1fr; width: 240px; }
+  .camera-caption { grid-column: 1 / -1; }
+  .navigation-help { right: 268px; width: min(290px, calc(100% - 284px)); }
+}
+.navigation-help {
+  position: absolute; top: 16px; right: 164px; z-index: 130;
+  width: min(290px, calc(100% - 180px)); padding: 16px;
+  background: rgba(12, 22, 39, .97); border: 1px solid #30445f; border-radius: 12px;
+  color: #cbd5e1; font-size: 12px; box-shadow: 0 8px 28px #0005;
+}
+.navigation-help strong { color: #f1f5f9; font-size: 14px; }
+.navigation-help dl { display: grid; grid-template-columns: auto 1fr; gap: 10px; }
+.navigation-help dt { color: #7dd3fc; }
+.navigation-help dd { margin: 0; }
+.navigation-help p { margin: 12px 0 0; line-height: 1.6; color: #94a3b8; }
+.html-overlay { position: absolute; inset: 0; pointer-events: none; }
+&nbsp;
+.tooltip {
+  position: fixed; background: rgba(8,12,24,.94);
+  border: 1px solid #2a4a8a; border-radius: 8px;
+  padding: 8px 12px; font-size: 11px;
+  pointer-events: none; z-index: 500; min-width: 130px;
+}
+.tt-name   { color: #e2e8f0; font-weight: 600; margin-bottom: 2px; font-family: monospace; }
+.tt-ip     { color: #475569; font-family: monospace; font-size: 10px; }
+.tt-status { font-weight: 600; margin-top: 3px; }
+.tt-metrics{ color: #94a3b8; font-size: 10px; margin-top: 2px; font-family: monospace; }
+.tt-type   { font-size: 10px; margin-top: 2px; }
+&nbsp;
+.link-hint {
+  position: absolute; bottom: 44px; left: 50%; transform: translateX(-50%);
+  background: rgba(99,102,241,.2); border: 1px solid #6366f1;
+  color: #a5b4fc; font-size: 11px; padding: 5px 14px; border-radius: 20px;
+  pointer-events: none; white-space: nowrap;
+}
+.hint {
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+  color: #94a3b8; font-size: 11px; pointer-events: none; letter-spacing: .02em; white-space: nowrap;
+  background: rgba(8,12,24,.7); border: 1px solid #1a2a4a;
+  padding: 8px 14px; border-radius: 12px; backdrop-filter: blur(4px);
+  max-width: calc(100% - 32px); white-space: normal; text-align: center; line-height: 1.7;
+}
+.hint b { color: #cbd5e1; }
+.hint.edit-hint { color: #a5b4fc; border-color: #3730a3; background: rgba(30,27,75,.5); }
+.hint.edit-hint b { color: #c7d2fe; }
+&nbsp;
+kbd {
+  background: rgba(148,163,184,.18); border: 1px solid rgba(148,163,184,.35);
+  border-radius: 3px; padding: 1px 5px; font-size: 10px; font-family: monospace; color: #cbd5e1;
+}
+&nbsp;
+.fade-enter-active, .fade-leave-active { transition: opacity .1s; }
+.fade-enter-from, .fade-leave-to       { opacity: 0; }
+&lt;/style&gt;
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-09-17T07:15:45.726Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    
