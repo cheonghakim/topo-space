@@ -201,6 +201,23 @@ await editor.save()
 editor.destroy()
 ```
 
+### Auto layout
+
+Force-directed placement for devices that don't have a manual position yet. Devices sharing a space/rack pull together; anything already positioned stays pinned unless `includeMapped` is set. Requires `mode: 'edit'` (gated by the `layout:update` permission, same as drag-to-move).
+
+```ts
+await editor.autoLayout({
+  deviceIds:     ['dev-1', 'dev-2'],  // defaults to every known device
+  includeMapped: false,               // re-lay-out already-positioned devices too
+  iterations:    200,
+  onProgress:    (fraction) => console.log(fraction),
+})
+
+// Stop an in-flight run early — devices keep whatever position they'd
+// reached so far.
+editor.cancelAutoLayout()
+```
+
 ### Backend push methods
 
 These never go through the UI permission guard — they're for a backend you already trust pushing facts it discovered, not a user editing the topology by hand — and they fire `onChange` with `event.source === 'api'` so you can tell backend-driven changes apart from user-driven ones.
@@ -637,6 +654,22 @@ await editor.save()
 
 // Vue 앱 언마운트 + Three.js 리소스 해제
 editor.destroy()
+```
+
+### 자동 배치 (Auto layout)
+
+아직 수동 위치가 없는 장비를 force-directed 방식으로 배치해요. 같은 space/rack에 속한 장비끼리는 서로 끌어당기고, 이미 위치가 있는 장비는 `includeMapped`를 켜지 않는 한 그대로 고정돼요. `mode: 'edit'`가 필요하고(드래그 이동과 동일하게 `layout:update` 권한으로 게이트됨).
+
+```ts
+await editor.autoLayout({
+  deviceIds:     ['dev-1', 'dev-2'],  // 생략하면 전체 장비 대상
+  includeMapped: false,               // true면 이미 배치된 장비도 다시 배치
+  iterations:    200,
+  onProgress:    (fraction) => console.log(fraction),
+})
+
+// 진행 중인 배치를 중간에 멈춤 — 그때까지 계산된 위치는 그대로 유지됨
+editor.cancelAutoLayout()
 ```
 
 ### 백엔드 push 메서드
