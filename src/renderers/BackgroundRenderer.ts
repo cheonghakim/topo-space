@@ -21,6 +21,7 @@ export class BackgroundRenderer {
   private scene: THREE.Scene;
   private objects = new Map<string, BgObj>();
   private editMode = false;
+  private pending = new Map<string, symbol>();
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -32,68 +33,79 @@ export class BackgroundRenderer {
 
   async addObject(obj: BackgroundObject) {
     if (this.objects.has(obj.id)) return;
-    const data = await loadAsset(obj.assetId);
-    if (!data) return;
+    const token = Symbol(obj.id);
+    this.pending.set(obj.id, token);
+    try {
+      const data = await loadAsset(obj.assetId);
+      if (!data || this.pending.get(obj.id) !== token) return;
 
-    let root: THREE.Object3D;
-    const materials: THREE.Material[] = [];
+      let root: THREE.Object3D;
+      const materials: THREE.Material[] = [];
 
-    if (obj.kind === "image") {
-      const url = URL.createObjectURL(new Blob([data]));
-      let texture: THREE.Texture;
-      try {
-        texture = await new THREE.TextureLoader().loadAsync(url);
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-      const w = obj.width ?? 10,
-        d = obj.depth ?? 10;
-      const mat = new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      });
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
-      mesh.rotation.x = -Math.PI / 2;
-      materials.push(mat);
-      root = mesh;
-    } else {
-      const modelObj = await loadGltfObject(data);
-      if (!modelObj) return;
-      root = modelObj;
-      root.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          const mats = Array.isArray(child.material)
-            ? child.material
-            : [child.material];
-          mats.forEach((m) => {
-            m.transparent = true;
-            materials.push(m);
-          });
+      if (obj.kind === "image") {
+        const url = URL.createObjectURL(new Blob([data]));
+        let texture: THREE.Texture;
+        try {
+          texture = await new THREE.TextureLoader().loadAsync(url);
+        } finally {
+          URL.revokeObjectURL(url);
         }
+        const w = obj.width ?? 10,
+          d = obj.depth ?? 10;
+        const mat = new THREE.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
+        mesh.rotation.x = -Math.PI / 2;
+        materials.push(mat);
+        root = mesh;
+      } else {
+        const modelObj = await loadGltfObject(data);
+        if (!modelObj) return;
+        root = modelObj;
+        root.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const mats = Array.isArray(child.material)
+              ? child.material
+              : [child.material];
+            mats.forEach((m) => {
+              m.transparent = true;
+              materials.push(m);
+            });
+          }
+        });
+        root.scale.setScalar(obj.scale ?? 1);
+      }
+
+      root.position.set(obj.position.x, obj.position.y, obj.position.z);
+      root.rotation.y = THREE.MathUtils.degToRad(obj.rotationY ?? 0);
+      root.traverse((child) => {
+        child.userData.backgroundId = obj.id;
       });
-      root.scale.setScalar(obj.scale ?? 1);
+
+      const opacity = this.editMode
+        ? EDIT_OPACITY
+        : (obj.opacity ?? DASHBOARD_OPACITY_DEFAULT);
+      materials.forEach((m) => {
+        m.opacity = opacity;
+      });
+
+      if (this.pending.get(obj.id) !== token) {
+        this._dispose({ root, materials, obj });
+        return;
+      }
+      this.scene.add(root);
+      this.objects.set(obj.id, { root, materials, obj });
+    } finally {
+      if (this.pending.get(obj.id) === token) this.pending.delete(obj.id);
     }
-
-    root.position.set(obj.position.x, obj.position.y, obj.position.z);
-    root.rotation.y = THREE.MathUtils.degToRad(obj.rotationY ?? 0);
-    root.traverse((child) => {
-      child.userData.backgroundId = obj.id;
-    });
-
-    const opacity = this.editMode
-      ? EDIT_OPACITY
-      : (obj.opacity ?? DASHBOARD_OPACITY_DEFAULT);
-    materials.forEach((m) => {
-      m.opacity = opacity;
-    });
-
-    this.scene.add(root);
-    this.objects.set(obj.id, { root, materials, obj });
   }
 
   removeObject(id: string) {
+    this.pending.delete(id);
     const o = this.objects.get(id);
     if (!o) return;
     this._dispose(o);
@@ -139,6 +151,7 @@ export class BackgroundRenderer {
   }
 
   dispose() {
+    this.pending.clear();
     this.objects.forEach((o) => this._dispose(o));
     this.objects.clear();
   }

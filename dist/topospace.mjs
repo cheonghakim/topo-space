@@ -5790,6 +5790,7 @@ var Da = .3, Oa = .85, ka = class {
 	scene;
 	objects = /* @__PURE__ */ new Map();
 	editMode = !1;
+	pending = /* @__PURE__ */ new Map();
 	constructor(e) {
 		this.scene = e;
 	}
@@ -5798,45 +5799,60 @@ var Da = .3, Oa = .85, ka = class {
 	}
 	async addObject(e) {
 		if (this.objects.has(e.id)) return;
-		let t = await Ta(e.assetId);
-		if (!t) return;
-		let n, r = [];
-		if (e.kind === "image") {
-			let i = URL.createObjectURL(new Blob([t])), a;
-			try {
-				a = await new R.TextureLoader().loadAsync(i);
-			} finally {
-				URL.revokeObjectURL(i);
+		let t = Symbol(e.id);
+		this.pending.set(e.id, t);
+		try {
+			let n = await Ta(e.assetId);
+			if (!n || this.pending.get(e.id) !== t) return;
+			let r, i = [];
+			if (e.kind === "image") {
+				let t = URL.createObjectURL(new Blob([n])), a;
+				try {
+					a = await new R.TextureLoader().loadAsync(t);
+				} finally {
+					URL.revokeObjectURL(t);
+				}
+				let o = e.width ?? 10, s = e.depth ?? 10, c = new R.MeshBasicMaterial({
+					map: a,
+					transparent: !0,
+					side: R.DoubleSide,
+					depthWrite: !1
+				}), l = new R.Mesh(new R.PlaneGeometry(o, s), c);
+				l.rotation.x = -Math.PI / 2, i.push(c), r = l;
+			} else {
+				let t = await ci(n);
+				if (!t) return;
+				r = t, r.traverse((e) => {
+					e instanceof R.Mesh && (Array.isArray(e.material) ? e.material : [e.material]).forEach((e) => {
+						e.transparent = !0, i.push(e);
+					});
+				}), r.scale.setScalar(e.scale ?? 1);
 			}
-			let o = e.width ?? 10, s = e.depth ?? 10, c = new R.MeshBasicMaterial({
-				map: a,
-				transparent: !0,
-				side: R.DoubleSide,
-				depthWrite: !1
-			}), l = new R.Mesh(new R.PlaneGeometry(o, s), c);
-			l.rotation.x = -Math.PI / 2, r.push(c), n = l;
-		} else {
-			let i = await ci(t);
-			if (!i) return;
-			n = i, n.traverse((e) => {
-				e instanceof R.Mesh && (Array.isArray(e.material) ? e.material : [e.material]).forEach((e) => {
-					e.transparent = !0, r.push(e);
+			r.position.set(e.position.x, e.position.y, e.position.z), r.rotation.y = R.MathUtils.degToRad(e.rotationY ?? 0), r.traverse((t) => {
+				t.userData.backgroundId = e.id;
+			});
+			let a = this.editMode ? Oa : e.opacity ?? Da;
+			if (i.forEach((e) => {
+				e.opacity = a;
+			}), this.pending.get(e.id) !== t) {
+				this._dispose({
+					root: r,
+					materials: i,
+					obj: e
 				});
-			}), n.scale.setScalar(e.scale ?? 1);
+				return;
+			}
+			this.scene.add(r), this.objects.set(e.id, {
+				root: r,
+				materials: i,
+				obj: e
+			});
+		} finally {
+			this.pending.get(e.id) === t && this.pending.delete(e.id);
 		}
-		n.position.set(e.position.x, e.position.y, e.position.z), n.rotation.y = R.MathUtils.degToRad(e.rotationY ?? 0), n.traverse((t) => {
-			t.userData.backgroundId = e.id;
-		});
-		let i = this.editMode ? Oa : e.opacity ?? Da;
-		r.forEach((e) => {
-			e.opacity = i;
-		}), this.scene.add(n), this.objects.set(e.id, {
-			root: n,
-			materials: r,
-			obj: e
-		});
 	}
 	removeObject(e) {
+		this.pending.delete(e);
 		let t = this.objects.get(e);
 		t && (this._dispose(t), this.objects.delete(e));
 	}
@@ -5868,7 +5884,7 @@ var Da = .3, Oa = .85, ka = class {
 		n && n.root.position.copy(t);
 	}
 	dispose() {
-		this.objects.forEach((e) => this._dispose(e)), this.objects.clear();
+		this.pending.clear(), this.objects.forEach((e) => this._dispose(e)), this.objects.clear();
 	}
 	_dispose(e) {
 		this.scene.remove(e.root), e.root.traverse((e) => {
@@ -8777,11 +8793,11 @@ function iu() {
 	return r ? r.configure(n) : (r = au(e, t, n), tu.set(e, r)), r;
 }
 function au(e, t, n = {}) {
-	let r = new kn(), i = new Bc(), a = Hc(), o, s, c, l, u, d, f, p, m, g, _, v, y, b = null, x = !1, S = {
+	let r = new kn(), i = new Bc(), a = Hc(), o, s, c, l, u, d, f, p, m, g, _, v, y, b = null, x = !1, S = !1, C = 0, w = {
 		x: 0,
 		y: 0
-	}, C = null, w = null, T = null, E = [], D = 0, O = !1, k = /* @__PURE__ */ new Map(), A = /* @__PURE__ */ new Set(), M = [], N = n, P = 0, F = 0, I = 0, L = !1, z = null, B = 0, V = [], H = [];
-	function U() {
+	}, T = null, E = null, D = null, O = [], k = 0, A = !1, M = /* @__PURE__ */ new Map(), N = /* @__PURE__ */ new Set(), P = [], F = n, I = 0, L = 0, z = 0, B = !1, V = null, H = 0, U = [], ee = [];
+	function te() {
 		return {
 			mappings: [...e.mappings.entries()].map(([e, t]) => [e, { ...t }]),
 			links: [...e.links.entries()].map(([e, t]) => [e, { ...t }]),
@@ -8789,73 +8805,87 @@ function au(e, t, n = {}) {
 			unmappedIds: e.unmappedDevices.map((e) => e.id)
 		};
 	}
-	function ee() {
-		V.push(U()), V.length > 30 && V.shift(), H.length = 0;
+	function ne() {
+		U.push(te()), U.length > 30 && U.shift(), ee.length = 0;
 	}
-	async function te(n) {
+	async function re(n) {
 		e.mappings.clear(), n.mappings.forEach(([t, n]) => e.mappings.set(t, n)), e.links.clear(), n.links.forEach(([t, n]) => e.links.set(t, n)), e.spaces.clear(), n.spaces.forEach(([t, n]) => e.spaces.set(t, n));
 		let r = new Set(n.unmappedIds), i = n.unmappedIds.map((t) => e.devices.get(t)).filter((e) => e != null);
 		e.unmappedDevices.splice(0, e.unmappedDevices.length, ...i), e.devices.forEach((t) => {
 			r.has(t.id) && !i.find((e) => e.id === t.id) && e.unmappedDevices.push(t);
-		}), await Ze(), t.select(null);
+		}), await et(), t.select(null);
 	}
-	function ne(e = {}) {
-		N = e;
+	function W(e = {}) {
+		F = e;
 	}
-	function re() {
+	function ie() {
 		let { width: e, height: t } = r.getSize();
 		c?.setResolution(e, t);
 	}
-	function W(n, i, a) {
-		x || (b = n, x = !0, e.configureSecurity({
-			mode: N.mode ?? t.mode,
-			features: N.features,
-			permissionResolver: N.permissionResolver,
+	function ae(n, i, a) {
+		if (x) return;
+		b = n, x = !0;
+		let w = ++C, T = S ? t.mode : F.mode ?? t.mode;
+		e.configureSecurity({
+			mode: T,
+			features: F.features,
+			permissionResolver: F.permissionResolver,
 			onPermissionDenied: (e) => {
-				t.addToast("Permission denied", "warning"), N.onPermissionDenied?.(e);
+				t.addToast("Permission denied", "warning"), F.onPermissionDenied?.(e);
 			},
-			onChange: N.onChange
-		}), t.setMode(N.mode ?? t.mode), Pn(t.colorblindMode ? "colorblind" : "default"), r.init(n, i, a, { onError: (e, t) => N.onError?.(e, t) }), o = new Ei(r.scene), s = new Oi(r.scene), c = new aa(r.scene), re(), r.onResize(re), l = new fa(r.scene), u = new ma(r.scene), d = new _a(r.scene), f = new ya(r.scene), p = new ka(r.scene), y = new Rc(r.camera, r.controls), _ = new Pc(), m = new Mc(r.camera, o, s, c), g = new Nc(r.camera, c, o, (e, n, r, i) => t.showContextMenu(r, i, e, n)), v = new zc(r.scene), N.data ? e.replaceData(N.data) : N.mockData !== !1 && e.loadMockData(), ae(), h(() => {
-			se(), Qe(), ie();
-		}), le(n), de(), ve(), N.onReady?.());
+			onChange: F.onChange
+		}), t.setMode(T), Pn(t.colorblindMode ? "colorblind" : "default"), r.init(n, i, a, { onError: (e, t) => F.onError?.(e, t) }), o = new Ei(r.scene), s = new Oi(r.scene), c = new aa(r.scene), ie(), r.onResize(ie), l = new fa(r.scene), u = new ma(r.scene), d = new _a(r.scene), f = new ya(r.scene), p = new ka(r.scene), y = new Rc(r.camera, r.controls), _ = new Pc(), m = new Mc(r.camera, o, s, c), g = new Nc(r.camera, c, o, (e, n, r, i) => t.showContextMenu(r, i, e, n)), v = new zc(r.scene), S ||= (F.data ? e.replaceData(F.data) : F.mockData !== !1 && e.loadMockData(), !0), se(), h(async () => {
+			!x || w !== C || (await le(w), !(!x || w !== C) && (tt(), oe()));
+		}), fe(n), me(), xe(), F.onReady?.();
 	}
-	function ie() {
-		N.features?.tour !== !1 && (localStorage.getItem("topospace.tourSeen") || $l());
+	function oe() {
+		F.features?.tour !== !1 && (localStorage.getItem("topospace.tourSeen") || $l());
 	}
-	function ae() {
+	function se() {
 		let n = t.activeRootSpaceId;
 		if (n) {
 			let t = e.spaces.get(n);
 			(!t || t.archived) && (n = null);
 		}
-		n ||= N.initialFloorId && e.spaces.has(N.initialFloorId) ? N.initialFloorId : e.rootSpaces[0]?.id ?? null;
+		n ||= F.initialFloorId && e.spaces.has(F.initialFloorId) ? F.initialFloorId : e.rootSpaces[0]?.id ?? null;
 		let r = n ? e.resolveLeafScope(n) : null;
 		r !== t.activeRootSpaceId && (t.activeRootSpaceId = r);
 	}
-	let oe = null;
-	async function se() {
-		await vi(a.customTypes);
-		let n = t.activeRootSpaceId;
-		s.loadSpaces(e.scopedSpaces(n)), o.loadInstanced(e.scopedDevices(n), e.mappings, (t) => e.getMappingByDeviceId(t)), c.loadLinks(e.scopedLinks(n), (e) => o.getDeviceWorldPos(e)), ce(), d.loadNodes([...e.virtualNodes.values()]), await p.loadObjects(e.scopedBackgroundObjects(n)), p.setEditMode(t.backgroundEditActive);
+	let ce = null;
+	async function le(n) {
+		if (await vi(a.customTypes), !x || n !== C) return;
+		let r = t.activeRootSpaceId;
+		s.loadSpaces(e.scopedSpaces(r)), o.loadInstanced(e.scopedDevices(r), e.mappings, (t) => e.getMappingByDeviceId(t)), c.loadLinks(e.scopedLinks(r), (e) => o.getDeviceWorldPos(e)), de(), d.loadNodes([...e.virtualNodes.values()]), await p.loadObjects(e.scopedBackgroundObjects(r)), !(!x || n !== C) && (p.setEditMode(t.backgroundEditActive), ue());
 	}
-	function ce() {
+	function ue() {
+		o.setLabelScale(t.fontScale), be(), l.setVisible(t.showParticles), [
+			"physical",
+			"logical",
+			"service_dependency",
+			"traffic_flow",
+			"security_path",
+			"manual",
+			"inferred"
+		].forEach((e) => c.setVisible(e, t.visibleLinkTypes.has(e)));
+	}
+	function de() {
 		let n = e.scopedLinks(t.activeRootSpaceId).filter((t) => {
 			let n = e.devices.get(t.sourceDeviceId), r = e.devices.get(t.targetDeviceId);
 			return n?.status !== "offline" && r?.status !== "offline";
 		});
 		l.syncLinks(n, (e) => c.getLinkPath(e));
 	}
-	function le(e) {
-		e.addEventListener("pointerdown", we), e.addEventListener("pointermove", Te), e.addEventListener("pointerup", Ee), e.addEventListener("pointerleave", ue), e.addEventListener("contextmenu", tt), window.addEventListener("keydown", De);
+	function fe(e) {
+		e.addEventListener("pointerdown", De), e.addEventListener("pointermove", Oe), e.addEventListener("pointerup", ke), e.addEventListener("pointerleave", pe), e.addEventListener("contextmenu", it), window.addEventListener("keydown", Ae);
 	}
-	function ue() {
-		m.clearPointer(), O = !1;
+	function pe() {
+		m.clearPointer(), A = !1;
 	}
-	function de() {
-		M.push(j(() => t.fontScale, (e) => o.setLabelScale(e), { immediate: !0 })), e.devices.forEach((e) => {
+	function me() {
+		P.push(j(() => t.fontScale, (e) => o.setLabelScale(e), { immediate: !0 })), e.devices.forEach((e) => {
 			let t = e.status ?? "unknown";
-			k.set(e.id, t), (t === "warning" || t === "critical") && A.add(e.id);
-		}), M.push(j(() => {
+			M.set(e.id, t), (t === "warning" || t === "critical") && N.add(e.id);
+		}), P.push(j(() => {
 			let t = "";
 			return e.devices.forEach((e) => {
 				t += `${e.id}:${e.status};`;
@@ -8863,15 +8893,15 @@ function au(e, t, n = {}) {
 		}, () => {
 			let t = !1;
 			if (e.devices.forEach((e) => {
-				let n = e.status ?? "unknown", r = k.get(e.id);
-				if (o.updateStatus(e.id, n), n === "warning" || n === "critical" ? A.add(e.id) : A.delete(e.id), r !== void 0 && r !== n) {
+				let n = e.status ?? "unknown", r = M.get(e.id);
+				if (o.updateStatus(e.id, n), n === "warning" || n === "critical" ? N.add(e.id) : N.delete(e.id), r !== void 0 && r !== n) {
 					let i = o.getDeviceWorldPos(e.id);
 					i && (n === "critical" || n === "offline" ? f.flash(i, "critical") : n === "warning" ? f.flash(i, "warning") : n === "normal" && (r === "critical" || r === "warning" || r === "offline") && f.flash(i, "recover")), (n === "offline" || r === "offline") && (t = !0);
 				}
-				k.set(e.id, n);
-			}), A.size) for (let t of [...A]) e.devices.has(t) || A.delete(t);
-			t && ce();
-		})), M.push(j(() => e.linksRevision, () => je())), M.push(j(() => e.lastAutoLayoutDeviceIds, (t) => {
+				M.set(e.id, n);
+			}), N.size) for (let t of [...N]) e.devices.has(t) || N.delete(t);
+			t && de();
+		})), P.push(j(() => e.linksRevision, () => Pe())), P.push(j(() => e.lastAutoLayoutDeviceIds, (t) => {
 			t.length && (t.forEach((t) => {
 				let n = e.getMappingByDeviceId(t);
 				if (!n?.position) return;
@@ -8881,16 +8911,16 @@ function au(e, t, n = {}) {
 					let r = e.getDevice(t);
 					r && o.addDevice(r, n);
 				}
-			}), c.refreshPositionsFor(t, (e) => o.getDeviceWorldPos(e)), ce());
-		})), M.push(j(() => t.activeRootSpaceId, async () => {
-			if (t.select(null), await Ze(), oe) {
-				let { type: e, id: n } = oe;
-				oe = null, t.select({
+			}), c.refreshPositionsFor(t, (e) => o.getDeviceWorldPos(e)), de());
+		})), P.push(j(() => t.activeRootSpaceId, async () => {
+			if (t.select(null), await et() && ce) {
+				let { type: e, id: n } = ce;
+				ce = null, t.select({
 					type: e,
 					id: n
-				}), e === "device" ? Le(n) : qe(n);
+				}), e === "device" ? Be(n) : Xe(n);
 			}
-		})), M.push(j(() => [...t.visibleLinkTypes], (e) => {
+		})), P.push(j(() => [...t.visibleLinkTypes], (e) => {
 			[
 				"physical",
 				"logical",
@@ -8900,45 +8930,45 @@ function au(e, t, n = {}) {
 				"manual",
 				"inferred"
 			].forEach((t) => c.setVisible(t, e.includes(t)));
-		})), M.push(j(() => t.hoveredId, (e, n) => {
+		})), P.push(j(() => t.hoveredId, (e, n) => {
 			n && (o.setHighlight(n, !1), c.setHighlight(null, n)), e && (t.selection?.type === "link" ? c.setHighlight(e, null) : o.setHighlight(e, !0));
-		})), M.push(j(() => t.selection, (n, r) => {
-			if (r?.type === "space" && s.setSelected(r.id, !1), r?.type === "link" && c.setSelected(null), o.setSelectedDevice(n?.type === "device" ? n.id : null), t.mode === "edit" && n && (n.type === "device" || n.type === "space" || n.type === "background") ? ge(n) : v?.detach(), !n) {
+		})), P.push(j(() => t.selection, (n, r) => {
+			if (r?.type === "space" && s.setSelected(r.id, !1), r?.type === "link" && c.setSelected(null), o.setSelectedDevice(n?.type === "device" ? n.id : null), t.mode === "edit" && n && (n.type === "device" || n.type === "space" || n.type === "background") ? ye(n) : v?.detach(), !n) {
 				u.clear(), t.blastSourceId = null, t.showRackServerList = !1;
 				return;
 			}
 			if (n.type === "device") {
 				let r = e.devices.get(n.id);
-				r && (r.status === "critical" || r.status === "warning") && t.showBlastRadius ? Ae(n.id) : u.clear();
+				r && (r.status === "critical" || r.status === "warning") && t.showBlastRadius ? Ne(n.id) : u.clear();
 				let i = e.getMappingByDeviceId(n.id);
 				i?.primarySpaceId && (t.selectedRackForList = i.primarySpaceId, t.showRackServerList = !0);
 			} else n.type === "space" ? (s.setSelected(n.id, !0), e.spaces.get(n.id)?.type === "rack" ? (t.selectedRackForList = n.id, t.showRackServerList = !0) : t.showRackServerList = !1) : n.type === "link" && c.setSelected(t.mode === "edit" ? n.id : null);
-		})), M.push(j(() => t.mode, (n) => {
-			e.setEditorMode(n), n === "view" ? (v?.detach(), c?.setSelected(null), g?.cancel(), _?.cancel(), C = null, w = null, T = null, E = []) : t.selection && (t.selection.type === "device" || t.selection.type === "space") && ge(t.selection);
-		}, { immediate: !0 })), M.push(j(() => t.linkToolActive, (e) => {
+		})), P.push(j(() => t.mode, (n) => {
+			e.setEditorMode(n), n === "view" ? (v?.detach(), c?.setSelected(null), g?.cancel(), _?.cancel(), T = null, E = null, D = null, O = []) : t.selection && (t.selection.type === "device" || t.selection.type === "space") && ye(t.selection);
+		}, { immediate: !0 })), P.push(j(() => t.linkToolActive, (e) => {
 			e || g.cancel(), b && (b.style.cursor = e ? "crosshair" : ""), e && t.addToast("Connect mode on — drag from one device to another", "info");
-		})), M.push(j(() => t.backgroundEditActive, (e) => {
+		})), P.push(j(() => t.backgroundEditActive, (e) => {
 			p?.setEditMode(e), !e && t.selection?.type === "background" && t.select(null), e && t.addToast("Background edit on — click a background object to move it", "info");
-		})), M.push(j(() => t.showParticles, (e) => l.setVisible(e))), M.push(j(() => t.showBlastRadius, (e) => {
+		})), P.push(j(() => t.showParticles, (e) => l.setVisible(e))), P.push(j(() => t.showBlastRadius, (e) => {
 			e || u.clear();
-		})), M.push(j(() => e.virtualNodes.size, () => {
+		})), P.push(j(() => e.virtualNodes.size, () => {
 			d.dispose(), d = new _a(r.scene), d.loadNodes([...e.virtualNodes.values()]);
-		})), M.push(j(() => t.timelineFrameIdx, (t) => {
+		})), P.push(j(() => t.timelineFrameIdx, (t) => {
 			if (t < 0) return;
 			let n = i.getFrame(t);
 			n && Object.entries(n.states).forEach(([t, n]) => e.updateDeviceStatus(t, n.status, n.metrics));
-		})), M.push(j(() => e.spaces.size, () => e.spaces.forEach((e) => s.addSpace(e)))), M.push(j(() => `${t.filter.search}|${t.filter.status.join(",")}|${t.filter.type.join(",")}|${t.alertsOnly}`, () => _e())), M.push(j(() => e.mappings.size, () => _e())), M.push(j(() => a.customTypes.size, () => {
+		})), P.push(j(() => e.spaces.size, () => e.spaces.forEach((e) => s.addSpace(e)))), P.push(j(() => `${t.filter.search}|${t.filter.status.join(",")}|${t.filter.type.join(",")}|${t.alertsOnly}`, () => be())), P.push(j(() => e.mappings.size, () => be())), P.push(j(() => a.customTypes.size, () => {
 			Wn(a.customTypes), gi(a.customTypes);
 		}, { immediate: !0 }));
 	}
-	function fe(e) {
+	function he(e) {
 		if (!b) return null;
 		let t = b.getBoundingClientRect(), n = new R.Vector2((e.clientX - t.left) / t.width * 2 - 1, -((e.clientY - t.top) / t.height) * 2 + 1), i = new R.Raycaster();
 		i.setFromCamera(n, r.camera);
 		let a = i.intersectObjects(p.getPickMeshes(), !0);
 		return a.length ? p.getBackgroundIdFromObject(a[0].object) : null;
 	}
-	function pe(e, t) {
+	function ge(e, t) {
 		if (!b) return null;
 		let n = b.getBoundingClientRect(), i = new R.Vector2((e.clientX - n.left) / n.width * 2 - 1, -((e.clientY - n.top) / n.height) * 2 + 1), a = new R.Raycaster();
 		a.setFromCamera(i, r.camera);
@@ -8947,11 +8977,11 @@ function au(e, t, n = {}) {
 		let s = new R.Plane().setFromNormalAndCoplanarPoint(o, t), c = new R.Vector3();
 		return a.ray.intersectPlane(s, c) ? c : null;
 	}
-	let me = .5;
-	function he(e) {
-		return e.x = Math.round(e.x / me) * me, e.z = Math.round(e.z / me) * me, e;
+	let _e = .5;
+	function ve(e) {
+		return e.x = Math.round(e.x / _e) * _e, e.z = Math.round(e.z / _e) * _e, e;
 	}
-	function ge(n) {
+	function ye(n) {
 		if (v) {
 			if (t.mode !== "edit") {
 				v.detach();
@@ -8978,7 +9008,7 @@ function au(e, t, n = {}) {
 			} else v.detach();
 		}
 	}
-	function _e() {
+	function be() {
 		let n = t.filter, r = n.search.toLowerCase().trim();
 		if (!(r || n.status.length > 0 || n.type.length > 0 || t.alertsOnly)) {
 			o.applySearchFilter(/* @__PURE__ */ new Set(), !1), t.searchMatchCount = null;
@@ -8993,28 +9023,28 @@ function au(e, t, n = {}) {
 			return n?.hostname ?? n?.ip ?? t;
 		}), t.searchMatchCount = i.size;
 	}
-	function ve() {
+	function xe() {
 		r.startLoop((n, i) => {
-			if (Ce(n, i), c.update(n), u.update(n), d.update(i), f.update(n), v.update(r.camera), o.tick(r.camera, r.getSize()), s.updateLod(r.camera, r.controls.target, r.getSize(), o.getLabelObstacles(), r.getLabelExclusions()), t.showParticles && l.update(n, t.visibleLinkTypes), Se(i), ye() || A.forEach((t) => {
+			if (Ee(n, i), c.update(n), u.update(n), d.update(i), f.update(n), v.update(r.camera), o.tick(r.camera, r.getSize()), s.updateLod(r.camera, r.controls.target, r.getSize(), o.getLabelObstacles(), r.getLabelExclusions()), t.showParticles && l.update(n, t.visibleLinkTypes), Te(i), Se() || N.forEach((t) => {
 				let n = e.devices.get(t)?.status;
 				n === "warning" ? o.pulseStatus(t, "warning", .4 * Math.abs(Math.sin(i * 1.6))) : n === "critical" && o.pulseStatus(t, "critical", .7 * Math.abs(Math.sin(i * 4)));
-			}), O && !C && !g.isDrawing && !_.hasPending) {
+			}), A && !T && !g.isDrawing && !_.hasPending) {
 				let e = m.castHover(32), n = e.deviceId ?? e.linkId ?? e.linkHandleId ?? null;
-				n ? (D = 0, n !== t.hoveredId && (t.hoveredId = n)) : t.hoveredId && (D += 1, D >= 3 && (t.hoveredId = null));
+				n ? (k = 0, n !== t.hoveredId && (t.hoveredId = n)) : t.hoveredId && (k += 1, k >= 3 && (t.hoveredId = null));
 			}
 		});
 	}
-	function ye() {
+	function Se() {
 		return !!t.filter.search.trim() || t.filter.status.length > 0 || t.filter.type.length > 0 || t.alertsOnly;
 	}
-	let be = [];
-	function xe() {
+	let Ce = [];
+	function we() {
 		let n = e.scopedDevices(t.activeRootSpaceId).filter((e) => e.status === "critical" || e.status === "warning").sort((e) => e.status === "critical" ? -1 : 1);
 		if (!n.length) {
-			be = [];
+			Ce = [];
 			return;
 		}
-		z ??= new R.Raycaster();
+		V ??= new R.Raycaster();
 		let i = r.camera, a = i.position, c = [...o.getInstancedMeshes(), ...s.getHitMeshes()], l = [];
 		for (let e of n) {
 			if (l.length >= 12) break;
@@ -9023,26 +9053,26 @@ function au(e, t, n = {}) {
 			let n = t.clone().project(i), r = Math.abs(n.x) > 1 || Math.abs(n.y) > 1 || n.z > 1 || n.z < -1, s = !1;
 			if (!r) {
 				let e = t.distanceTo(a), n = t.clone().sub(a).normalize();
-				z.set(a, n), z.far = Math.max(e - .15, 0), s = z.intersectObjects(c, !1).length > 0;
+				V.set(a, n), V.far = Math.max(e - .15, 0), s = V.intersectObjects(c, !1).length > 0;
 			}
 			!r && !s || l.push({
 				id: e.id,
 				status: e.status
 			});
 		}
-		be = l;
+		Ce = l;
 	}
-	function Se(e) {
+	function Te(e) {
 		if (!b || !o) {
 			t.offscreenAlerts.length && (t.offscreenAlerts = []);
 			return;
 		}
-		if (e - B >= .25 && (B = e, xe()), !be.length) {
+		if (e - H >= .25 && (H = e, we()), !Ce.length) {
 			t.offscreenAlerts.length && (t.offscreenAlerts = []);
 			return;
 		}
 		let n = r.camera, i = b.clientWidth || 1, a = b.clientHeight || 1, s = [];
-		for (let e of be) {
+		for (let e of Ce) {
 			let t = o.getDeviceWorldPos(e.id);
 			if (!t) continue;
 			let r = t.clone().project(n), c = r.x, l = -r.y;
@@ -9058,34 +9088,34 @@ function au(e, t, n = {}) {
 		}
 		t.offscreenAlerts = s;
 	}
-	function Ce(n, r) {
-		F += 1, P ||= r;
-		let i = r - P;
+	function Ee(n, r) {
+		L += 1, I ||= r;
+		let i = r - I;
 		if (i < 5) return;
-		let a = F / i, o = performance.now();
-		a < 30 && o - I > 15e3 && (I = o, N.onPerformanceWarning?.({
+		let a = L / i, o = performance.now();
+		a < 30 && o - z > 15e3 && (z = o, F.onPerformanceWarning?.({
 			type: "low-fps",
 			fps: Math.round(a * 10) / 10,
 			frameMs: Math.round(n * 1e4) / 10,
 			devices: e.devices.size,
 			links: e.links.size
-		}), t.showParticles && !L && (L = !0, t.showParticles = !1, t.addToast("Performance mode: link-traffic particles disabled (low frame rate detected)", "warning"))), P = r, F = 0;
+		}), t.showParticles && !B && (B = !0, t.showParticles = !1, t.addToast("Performance mode: link-traffic particles disabled (low frame rate detected)", "warning"))), I = r, L = 0;
 	}
-	function we(n) {
+	function De(n) {
 		if (!b) return;
-		if (S = {
+		if (w = {
 			x: n.clientX,
 			y: n.clientY
-		}, m.updatePointer(n, b), O = !0, t.mode === "edit" && v.isVisible) {
+		}, m.updatePointer(n, b), A = !0, t.mode === "edit" && v.isVisible) {
 			let t = v.pickAxis(m.currentPointer, r.camera);
 			if (t) {
-				C = t, T = v.position, w = t === "y" ? pe(n, T) : m.getGroundPoint(n, b);
+				T = t, D = v.position, E = t === "y" ? ge(n, D) : m.getGroundPoint(n, b);
 				let i = v.currentTarget;
-				if (E = [], i?.type === "space") {
-					let t = T.clone();
+				if (O = [], i?.type === "space") {
+					let t = D.clone();
 					(e.devicesBySpace.get(i.id) ?? []).forEach((e) => {
 						let n = o.getDeviceWorldPos(e.id);
-						n && E.push({
+						n && O.push({
 							id: e.id,
 							offset: n.clone().sub(t)
 						});
@@ -9096,7 +9126,7 @@ function au(e, t, n = {}) {
 			}
 		}
 		if (t.mode === "edit" && t.backgroundEditActive) {
-			let e = fe(n);
+			let e = he(n);
 			if (e) {
 				t.select({
 					type: "background",
@@ -9107,27 +9137,27 @@ function au(e, t, n = {}) {
 		}
 		let i = m.castClick(t.linkToolActive);
 		if (t.mode === "edit" && t.linkToolActive) {
-			let e = i.deviceId ?? Oe(n, b, 28);
+			let e = i.deviceId ?? je(n, b, 28);
 			if (e) {
 				g.onMouseDown(e, n), r.controls.enabled = !1;
 				return;
 			}
 		}
 		if (t.mode === "edit" && i.linkHandleId) {
-			ee(), _.onMouseDown(i.linkHandleId, "linkHandle", n), r.controls.enabled = !1;
+			ne(), _.onMouseDown(i.linkHandleId, "linkHandle", n), r.controls.enabled = !1;
 			return;
 		}
 		r.controls.enabled = !0;
 	}
-	function Te(n) {
+	function Oe(n) {
 		if (!b) return;
-		if (m.updatePointer(n, b), O = !0, t.mode === "edit" && C && w && T) {
-			let e = C === "y" ? pe(n, T) : m.getGroundPoint(n, b);
+		if (m.updatePointer(n, b), A = !0, t.mode === "edit" && T && E && D) {
+			let e = T === "y" ? ge(n, D) : m.getGroundPoint(n, b);
 			if (e) {
-				let t = e.clone().sub(w), n = T.clone();
-				(C === "x" || C === "xz") && (n.x += t.x), (C === "z" || C === "xz") && (n.z += t.z), C === "y" && (n.y = Math.max(0, T.y + t.y));
+				let t = e.clone().sub(E), n = D.clone();
+				(T === "x" || T === "xz") && (n.x += t.x), (T === "z" || T === "xz") && (n.z += t.z), T === "y" && (n.y = Math.max(0, D.y + t.y));
 				let r = v.currentTarget;
-				C !== "y" && r?.type !== "background" && he(n), v.setPosition(n), r?.type === "device" ? (o.setPosition(r.id, n), c.refreshPositionsFor([r.id], (e) => o.getDeviceWorldPos(e)), ce()) : r?.type === "space" ? (s.setPosition(r.id, n), E.forEach((e) => o.setPosition(e.id, n.clone().add(e.offset))), c.refreshPositionsFor(E.map((e) => e.id), (e) => o.getDeviceWorldPos(e)), ce()) : r?.type === "background" && p.setPosition(r.id, n);
+				T !== "y" && r?.type !== "background" && ve(n), v.setPosition(n), r?.type === "device" ? (o.setPosition(r.id, n), c.refreshPositionsFor([r.id], (e) => o.getDeviceWorldPos(e)), de()) : r?.type === "space" ? (s.setPosition(r.id, n), O.forEach((e) => o.setPosition(e.id, n.clone().add(e.offset))), c.refreshPositionsFor(O.map((e) => e.id), (e) => o.getDeviceWorldPos(e)), de()) : r?.type === "background" && p.setPosition(r.id, n);
 			}
 			return;
 		}
@@ -9139,7 +9169,7 @@ function au(e, t, n = {}) {
 			let e = _.onMouseMove(n, b, r.camera);
 			if (e && _.isDragging) {
 				let t = _.currentTarget;
-				t.type === "device" ? o.setPosition(t.id, he(e)) : t.type === "space" ? s.setPosition(t.id, he(e)) : t.type === "linkHandle" && (c.updateMidpoint(t.id, e.x, e.z), ce());
+				t.type === "device" ? o.setPosition(t.id, ve(e)) : t.type === "space" ? s.setPosition(t.id, ve(e)) : t.type === "linkHandle" && (c.updateMidpoint(t.id, e.x, e.z), de());
 				return;
 			}
 		}
@@ -9150,11 +9180,11 @@ function au(e, t, n = {}) {
 		let i = t.hoveredId;
 		i && e.devices.has(i) ? (t.showTooltipAt(n.clientX, n.clientY, i), b.style.cursor = t.linkToolActive ? "crosshair" : "pointer") : i ? (t.hideTooltip(), b.style.cursor = t.mode === "edit" ? "move" : "pointer") : (t.hideTooltip(), b.style.cursor = t.linkToolActive ? "crosshair" : "");
 	}
-	function Ee(n) {
+	function ke(n) {
 		if (!b) return;
-		if (r.controls.enabled = !0, t.mode === "edit" && C) {
+		if (r.controls.enabled = !0, t.mode === "edit" && T) {
 			let n = v.currentTarget, r = v.position;
-			ee();
+			ne();
 			let i = [];
 			n?.type === "device" ? (e.mapDevice(n.id, e.getMappingByDeviceId(n.id)?.primarySpaceId ?? "", 0, {
 				x: r.x,
@@ -9164,25 +9194,25 @@ function au(e, t, n = {}) {
 				x: r.x,
 				y: r.y,
 				z: r.z
-			} }), E.forEach((t) => {
+			} }), O.forEach((t) => {
 				let i = r.clone().add(t.offset);
 				e.mapDevice(t.id, e.getMappingByDeviceId(t.id)?.primarySpaceId ?? n.id, 0, {
 					x: i.x,
 					y: i.y,
 					z: i.z
 				});
-			}), e.logChange("space.update", `Space moved: ${n.id} (+${E.length} devices)`), t.addToast("Space moved", "success"), i = E.map((e) => e.id)) : n?.type === "background" && (e.updateBackgroundObject(n.id, { position: {
+			}), e.logChange("space.update", `Space moved: ${n.id} (+${O.length} devices)`), t.addToast("Space moved", "success"), i = O.map((e) => e.id)) : n?.type === "background" && (e.updateBackgroundObject(n.id, { position: {
 				x: r.x,
 				y: r.y,
 				z: r.z
-			} }), e.logChange("background.update", `Background moved: ${n.id}`), t.addToast("Background moved", "success")), i.length && (c.refreshPositionsFor(i, (e) => o.getDeviceWorldPos(e)), ce()), C = null, w = null, T = null, E = [];
+			} }), e.logChange("background.update", `Background moved: ${n.id}`), t.addToast("Background moved", "success")), i.length && (c.refreshPositionsFor(i, (e) => o.getDeviceWorldPos(e)), de()), T = null, E = null, D = null, O = [];
 			return;
 		}
-		if (t.mode === "edit" && t.backgroundEditActive && t.selection?.type === "background" && fe(n)) return;
+		if (t.mode === "edit" && t.backgroundEditActive && t.selection?.type === "background" && he(n)) return;
 		m.updatePointer(n, b);
 		let i = m.castClick(t.linkToolActive);
 		if (t.mode === "edit" && t.linkToolActive && g.isDrawing) {
-			let e = i.deviceId ?? Oe(n, b, 28), r = g.isDragging;
+			let e = i.deviceId ?? je(n, b, 28), r = g.isDragging;
 			g.onMouseUp(e ?? null, n) === "cancelled" && r && t.addToast("Release on a device to create a link", "info");
 			return;
 		}
@@ -9190,11 +9220,11 @@ function au(e, t, n = {}) {
 			let i = _.onMouseUp(n, b, r.camera);
 			if (i) {
 				let { targetId: n, targetType: r, newPos: a } = i;
-				r !== "linkHandle" && he(a), r !== "linkHandle" && ee(), r === "device" ? (e.mapDevice(n, e.getMappingByDeviceId(n)?.primarySpaceId ?? "", 0, {
+				r !== "linkHandle" && ve(a), r !== "linkHandle" && ne(), r === "device" ? (e.mapDevice(n, e.getMappingByDeviceId(n)?.primarySpaceId ?? "", 0, {
 					x: a.x,
 					y: 0,
 					z: a.z
-				}), e.logChange("layout.update", `Device moved: ${n}`), t.addToast("Device moved", "success"), c.refreshPositionsFor([n], (e) => o.getDeviceWorldPos(e)), ce()) : r === "space" ? (e.updateSpace(n, { position: {
+				}), e.logChange("layout.update", `Device moved: ${n}`), t.addToast("Device moved", "success"), c.refreshPositionsFor([n], (e) => o.getDeviceWorldPos(e)), de()) : r === "space" ? (e.updateSpace(n, { position: {
 					x: a.x,
 					y: 0,
 					z: a.z
@@ -9205,7 +9235,7 @@ function au(e, t, n = {}) {
 				return;
 			}
 		}
-		let a = n.clientX - S.x, s = n.clientY - S.y;
+		let a = n.clientX - w.x, s = n.clientY - w.y;
 		Math.sqrt(a * a + s * s) > 8 || (i.deviceId ? n.ctrlKey || n.metaKey ? (t.multiSelectedDeviceIds.has(i.deviceId) ? t.multiSelectedDeviceIds.delete(i.deviceId) : (t.multiSelectedDeviceIds.add(i.deviceId), t.multiSelectedDeviceIds.size === 1 && t.select({
 			type: "device",
 			id: i.deviceId
@@ -9215,12 +9245,12 @@ function au(e, t, n = {}) {
 		})) : i.spaceId ? (t.multiSelectedDeviceIds.clear(), o.setMultiHighlight([]), t.select({
 			type: "space",
 			id: i.spaceId
-		}), t.mode === "view" && e.spaces.get(i.spaceId)?.type === "rack" && qe(i.spaceId)) : i.linkId ? (t.multiSelectedDeviceIds.clear(), o.setMultiHighlight([]), t.select({
+		}), t.mode === "view" && e.spaces.get(i.spaceId)?.type === "rack" && Xe(i.spaceId)) : i.linkId ? (t.multiSelectedDeviceIds.clear(), o.setMultiHighlight([]), t.select({
 			type: "link",
 			id: i.linkId
 		})) : i.linkHandleId || (t.multiSelectedDeviceIds.clear(), o.setMultiHighlight([]), t.select(null)));
 	}
-	function De(n) {
+	function Ae(n) {
 		if (n.key === "Escape") {
 			t.select(null), t.hideContextMenu(), t.multiSelectedDeviceIds.clear(), o?.setMultiHighlight([]), g.cancel(), _.cancel(), r.controls.enabled = !0, u.clear(), t.blastSourceId = null;
 			return;
@@ -9229,19 +9259,19 @@ function au(e, t, n = {}) {
 			y.flyToOverview();
 			return;
 		}
-		if ((n.key === "l" || n.key === "L") && !ke()) {
+		if ((n.key === "l" || n.key === "L") && !Me()) {
 			t.mode === "edit" && t.toggleLinkTool();
 			return;
 		}
-		if ((n.key === "]" || n.key === "[") && !ke()) {
-			Ke(n.key === "]" ? 1 : -1);
+		if ((n.key === "]" || n.key === "[") && !Me()) {
+			Ye(n.key === "]" ? 1 : -1);
 			return;
 		}
-		if (t.mode === "edit" && (n.key === "Delete" || n.key === "Backspace") && !ke()) {
+		if (t.mode === "edit" && (n.key === "Delete" || n.key === "Backspace") && !Me()) {
 			if (n.preventDefault(), t.multiSelectedDeviceIds.size > 1) {
 				let n = [...t.multiSelectedDeviceIds];
 				t.requestConfirm(`Delete ${n.length} selected devices? This also removes their links.`, () => {
-					ee(), n.forEach((t) => {
+					ne(), n.forEach((t) => {
 						e.unmapDevice(t);
 					}), e.logChange("device.unmap", `${n.length} devices removed`), t.addToast(`${n.length} devices removed`, "info"), t.multiSelectedDeviceIds.clear(), o.setMultiHighlight([]), t.select(null);
 				});
@@ -9249,23 +9279,23 @@ function au(e, t, n = {}) {
 			}
 			let r = t.selection;
 			if (!r) return;
-			ee(), r.type === "device" ? (e.unmapDevice(r.id), e.logChange("device.unmap", `Device removed: ${r.id}`), t.addToast("Device removed", "info"), t.select(null)) : r.type === "link" ? (e.removeLink(r.id), e.logChange("topology.link.delete", `Link deleted: ${r.id}`), t.addToast("Link deleted", "info"), t.select(null)) : r.type === "space" && (e.archiveSpace(r.id), $e(r.id), e.logChange("space.archive", `Space archived: ${r.id}`), t.addToast("Space archived", "info"), t.select(null));
+			ne(), r.type === "device" ? (e.unmapDevice(r.id), e.logChange("device.unmap", `Device removed: ${r.id}`), t.addToast("Device removed", "info"), t.select(null)) : r.type === "link" ? (e.removeLink(r.id), e.logChange("topology.link.delete", `Link deleted: ${r.id}`), t.addToast("Link deleted", "info"), t.select(null)) : r.type === "space" && (e.archiveSpace(r.id), nt(r.id), e.logChange("space.archive", `Space archived: ${r.id}`), t.addToast("Space archived", "info"), t.select(null));
 			return;
 		}
-		if (n.ctrlKey && n.key === "z" && !ke()) {
+		if (n.ctrlKey && n.key === "z" && !Me()) {
 			n.preventDefault();
-			let e = V.pop();
-			e ? (H.push(U()), te(e), t.addToast("Undone", "info")) : t.addToast("Nothing to undo", "info");
+			let e = U.pop();
+			e ? (ee.push(te()), re(e), t.addToast("Undone", "info")) : t.addToast("Nothing to undo", "info");
 			return;
 		}
-		if (n.ctrlKey && n.key === "y" && !ke()) {
+		if (n.ctrlKey && n.key === "y" && !Me()) {
 			n.preventDefault();
-			let e = H.pop();
-			e ? (V.push(U()), te(e), t.addToast("Redone", "info")) : t.addToast("Nothing to redo", "info");
+			let e = ee.pop();
+			e ? (U.push(te()), re(e), t.addToast("Redone", "info")) : t.addToast("Nothing to redo", "info");
 			return;
 		}
 	}
-	function Oe(t, n, i) {
+	function je(t, n, i) {
 		let a = n.getBoundingClientRect(), o = t.clientX - a.left, s = t.clientY - a.top, c = null, l = i * i;
 		return e.mappings.forEach((e) => {
 			if (!e.position || e.mappingStatus === "unmapped") return;
@@ -9275,11 +9305,11 @@ function au(e, t, n = {}) {
 			f < l && (l = f, c = e.rawDeviceId);
 		}), c;
 	}
-	function ke() {
+	function Me() {
 		let e = document.activeElement;
 		return e instanceof HTMLInputElement || e instanceof HTMLTextAreaElement || e instanceof HTMLSelectElement;
 	}
-	function Ae(n) {
+	function Ne(n) {
 		let r = [...e.links.values()], i = /* @__PURE__ */ new Map();
 		r.forEach((e) => {
 			e.sourceDeviceId === n && i.set(e.targetDeviceId, n), e.targetDeviceId === n && i.set(e.sourceDeviceId, n);
@@ -9302,7 +9332,7 @@ function au(e, t, n = {}) {
 			linkedDeviceId: e
 		})), u.show(s, (e) => o.getDeviceWorldPos(e)), t.blastSourceId = n;
 	}
-	function je() {
+	function Pe() {
 		let n = c.getRenderedLinkIds(), r = (e) => o.getDeviceWorldPos(e);
 		n.forEach((t) => {
 			e.links.has(t) || c.removeLink(t);
@@ -9316,9 +9346,9 @@ function au(e, t, n = {}) {
 			"security_path",
 			"manual",
 			"inferred"
-		].forEach((e) => c.setVisible(e, t.visibleLinkTypes.has(e))), ce();
+		].forEach((e) => c.setVisible(e, t.visibleLinkTypes.has(e))), de();
 	}
-	function Me(n, i) {
+	function Fe(n, i) {
 		if (!b) return;
 		if (t.mode !== "edit") {
 			t.addToast("Switch to Edit mode to place devices", "warning");
@@ -9327,7 +9357,7 @@ function au(e, t, n = {}) {
 		let a = b.getBoundingClientRect(), s = new R.Vector2((i.clientX - a.left) / a.width * 2 - 1, -((i.clientY - a.top) / a.height) * 2 + 1), c = new R.Raycaster();
 		c.setFromCamera(s, r.camera);
 		let l = new R.Plane(new R.Vector3(0, 1, 0), 0), u = new R.Vector3(), d = r.controls.target, f = u;
-		(!c.ray.intersectPlane(l, u) || u.distanceTo(d) > 60) && (f = d.clone().setY(0)), ee(), e.mapDevice(n, "", 0, {
+		(!c.ray.intersectPlane(l, u) || u.distanceTo(d) > 60) && (f = d.clone().setY(0)), ne(), e.mapDevice(n, "", 0, {
 			x: f.x,
 			y: .4,
 			z: f.z
@@ -9337,18 +9367,18 @@ function au(e, t, n = {}) {
 				o.addDevice(r, i), t.select({
 					type: "device",
 					id: n
-				}), _e();
+				}), be();
 				let e = o.getDeviceWorldPos(n);
 				e && y.flyToDevice(e);
 			} else t.addToast("Failed to place device — check Edit mode", "warning");
 		});
 	}
-	function Ne(n, r, i) {
+	function Ie(n, r, i) {
 		if (t.mode !== "edit") {
 			t.addToast("Switch to Edit mode to create links", "warning"), J().hideContextMenu();
 			return;
 		}
-		ee();
+		ne();
 		let a = `link-${Date.now()}`;
 		e.addLink({
 			id: a,
@@ -9359,14 +9389,14 @@ function au(e, t, n = {}) {
 			status: "up"
 		}), e.logChange("topology.link.create", `Link created: ${i}`), t.addToast(`${i} link created`, "success"), J().hideContextMenu();
 	}
-	function Pe() {
+	function Le() {
 		try {
 			return r.renderer.render(r.scene, r.camera), r.renderer.domElement.toDataURL("image/jpeg", .5);
 		} catch {
 			return;
 		}
 	}
-	function Fe(n) {
+	function Re(n) {
 		let i = {
 			id: `view-${Date.now()}`,
 			name: n,
@@ -9381,64 +9411,64 @@ function au(e, t, n = {}) {
 				z: r.controls.target.z
 			},
 			createdAt: (/* @__PURE__ */ new Date()).toLocaleString(),
-			thumbnail: Pe()
+			thumbnail: Le()
 		};
 		e.addSavedView(i), t.addToast(`View saved: ${n}`, "success");
 	}
-	function Ie(e) {
+	function ze(e) {
 		y.flyTo(new R.Vector3(e.cameraPos.x, e.cameraPos.y, e.cameraPos.z), new R.Vector3(e.cameraTarget.x, e.cameraTarget.y, e.cameraTarget.z));
 	}
-	function Le(t) {
+	function Be(t) {
 		let n = e.getMappingByDeviceId(t)?.primarySpaceId;
-		if (n && Je(n, {
+		if (n && Ze(n, {
 			type: "device",
 			id: t
 		})) return;
 		let r = o.getDeviceWorldPos(t);
 		r && y.flyToDevice(r);
 	}
-	function Re() {
+	function Ve() {
 		y.flyToOverview();
 	}
-	function ze() {
+	function He() {
 		let e = r.controls, t = r.camera.position.clone().sub(e.target), n = new R.Spherical().setFromVector3(t);
 		n.theta = 0;
 		let i = e.target.clone().add(new R.Vector3().setFromSpherical(n));
 		y.flyTo(i, e.target.clone());
 	}
-	function Be(e) {
+	function Ue(e) {
 		y.zoom(e);
 	}
-	function Ve(e) {
+	function We(e) {
 		y.setView(e);
 	}
-	function He(e, t) {
+	function Ge(e, t) {
 		y.panToXZ(e, t);
 	}
-	function Ue(e, t) {
+	function Ke(e, t) {
 		o.setAcknowledged(e, t);
 	}
-	function We() {
+	function qe() {
 		t.setColorblindMode(!t.colorblindMode), Pn(t.colorblindMode ? "colorblind" : "default"), o?.recolorAll();
 	}
-	function Ge() {
+	function Je() {
 		let n = {
 			critical: 0,
 			warning: 1
 		};
 		return e.scopedDevices(t.activeRootSpaceId).filter((e) => e.status === "critical" || e.status === "warning").sort((e, t) => (n[e.status ?? ""] ?? 9) - (n[t.status ?? ""] ?? 9));
 	}
-	function Ke(e) {
-		let n = Ge();
+	function Ye(e) {
+		let n = Je();
 		if (!n.length) return;
 		let r = n.findIndex((e) => e.id === t.selectedDeviceId), i = n[r === -1 ? e === 1 ? 0 : n.length - 1 : (r + e + n.length) % n.length];
 		t.select({
 			type: "device",
 			id: i.id
-		}), Le(i.id);
+		}), Be(i.id);
 	}
-	function qe(t) {
-		if (Je(t, {
+	function Xe(t) {
+		if (Ze(t, {
 			type: "space",
 			id: t
 		})) return;
@@ -9451,23 +9481,25 @@ function au(e, t, n = {}) {
 		};
 		y.flyToSpace(r, i);
 	}
-	function Je(n, r) {
+	function Ze(n, r) {
 		let i = e.resolveLeafScope(n);
-		return !i || i === t.activeRootSpaceId ? !1 : (oe = r, t.activeRootSpaceId = i, !0);
+		return !i || i === t.activeRootSpaceId ? !1 : (ce = r, t.activeRootSpaceId = i, !0);
 	}
-	function Ye(e) {
+	function Qe(e) {
 		let t = d.getNodeWorldPos(e);
 		t && y.flyToDevice(t);
 	}
-	function Xe(t) {
+	function $e(t) {
 		if (t < 0) return;
 		let n = i.getFrame(t);
 		n && Object.entries(n.states).forEach(([t, n]) => e.updateDeviceStatus(t, n.status, n.metrics));
 	}
-	async function Ze() {
-		ae();
-		let n = t.activeRootSpaceId;
-		s.dispose(), s = new Oi(r.scene), s.loadSpaces(e.scopedSpaces(n)), o.dispose(), o = new Ei(r.scene), await vi(a.customTypes), o.loadInstanced(e.scopedDevices(n), e.mappings, (t) => e.getMappingByDeviceId(t)), c.dispose(), c = new aa(r.scene), re(), c.loadLinks(e.scopedLinks(n), (e) => o.getDeviceWorldPos(e)), [
+	async function et() {
+		if (!x) return;
+		let n = ++C;
+		se();
+		let i = t.activeRootSpaceId;
+		if (s.dispose(), s = new Oi(r.scene), s.loadSpaces(e.scopedSpaces(i)), o.dispose(), o = new Ei(r.scene), await vi(a.customTypes), !(!x || n !== C) && (o.loadInstanced(e.scopedDevices(i), e.mappings, (t) => e.getMappingByDeviceId(t)), c.dispose(), c = new aa(r.scene), ie(), c.loadLinks(e.scopedLinks(i), (e) => o.getDeviceWorldPos(e)), [
 			"physical",
 			"logical",
 			"service_dependency",
@@ -9475,9 +9507,9 @@ function au(e, t, n = {}) {
 			"security_path",
 			"manual",
 			"inferred"
-		].forEach((e) => c.setVisible(e, t.visibleLinkTypes.has(e))), ce(), p.dispose(), p = new ka(r.scene), await p.loadObjects(e.scopedBackgroundObjects(n)), p.setEditMode(t.backgroundEditActive), m = new Mc(r.camera, o, s, c), g = new Nc(r.camera, c, o, (e, t, n, r) => J().showContextMenu(n, r, e, t)), Qe();
+		].forEach((e) => c.setVisible(e, t.visibleLinkTypes.has(e))), de(), p.dispose(), p = new ka(r.scene), await p.loadObjects(e.scopedBackgroundObjects(i)), !(!x || n !== C))) return p.setEditMode(t.backgroundEditActive), m = new Mc(r.camera, o, s, c), g = new Nc(r.camera, c, o, (e, t, n, r) => J().showContextMenu(n, r, e, t)), ue(), tt(), !0;
 	}
-	function Qe() {
+	function tt() {
 		let n = e.scopedBounds(t.activeRootSpaceId);
 		if (!n) {
 			y.flyToOverview();
@@ -9489,40 +9521,40 @@ function au(e, t, n = {}) {
 			depth: n.maxZ - n.minZ
 		});
 	}
-	function $e(n) {
+	function nt(n) {
 		let r = t.activeRootSpaceId;
 		if (r && !e.descendantSpaceIds(r).has(n)) return;
 		let i = e.spaces.get(n);
 		s.removeSpace(n), i && !i.archived && (s.addSpace(i), t.selection?.type === "space" && t.selection.id === n && s.setSelected(n, !0));
 	}
-	function et() {
-		x = !1, t.offscreenAlerts = [], M.splice(0).forEach((e) => e()), b?.removeEventListener("pointerdown", we), b?.removeEventListener("pointermove", Te), b?.removeEventListener("pointerup", Ee), b?.removeEventListener("pointerleave", ue), b?.removeEventListener("contextmenu", tt), window.removeEventListener("keydown", De), v?.dispose(), o?.dispose(), s?.dispose(), c?.dispose(), l?.dispose(), u?.dispose(), d?.dispose(), f?.dispose(), y.dispose(), r.dispose(), b = null, k.clear(), A.clear();
+	function rt() {
+		x = !1, ++C, t.offscreenAlerts = [], P.splice(0).forEach((e) => e()), b?.removeEventListener("pointerdown", De), b?.removeEventListener("pointermove", Oe), b?.removeEventListener("pointerup", ke), b?.removeEventListener("pointerleave", pe), b?.removeEventListener("contextmenu", it), window.removeEventListener("keydown", Ae), v?.dispose(), o?.dispose(), s?.dispose(), c?.dispose(), l?.dispose(), u?.dispose(), d?.dispose(), f?.dispose(), p?.dispose(), y.dispose(), r.dispose(), b = null, M.clear(), N.clear();
 	}
-	function tt(e) {
+	function it(e) {
 		e.preventDefault();
 	}
 	return {
-		configure: ne,
-		init: W,
-		dispose: et,
-		dropDeviceAt: Me,
-		confirmCreateLink: Ne,
-		saveCurrentView: Fe,
-		loadSavedView: Ie,
-		focusDevice: Le,
-		focusSpace: qe,
-		focusVirtualNode: Ye,
-		resetCamera: Re,
-		faceNorth: ze,
-		zoomCamera: Be,
-		setCameraView: Ve,
-		flyToWorldPoint: He,
-		setDeviceAcknowledged: Ue,
-		toggleColorblindMode: We,
-		cycleAlarms: Ke,
-		onTimelineScrub: Xe,
-		refreshSpace: $e,
-		rebuildAll: Ze,
+		configure: W,
+		init: ae,
+		dispose: rt,
+		dropDeviceAt: Fe,
+		confirmCreateLink: Ie,
+		saveCurrentView: Re,
+		loadSavedView: ze,
+		focusDevice: Be,
+		focusSpace: Xe,
+		focusVirtualNode: Qe,
+		resetCamera: Ve,
+		faceNorth: He,
+		zoomCamera: Ue,
+		setCameraView: We,
+		flyToWorldPoint: Ge,
+		setDeviceAcknowledged: Ke,
+		toggleColorblindMode: qe,
+		cycleAlarms: Ye,
+		onTimelineScrub: $e,
+		refreshSpace: nt,
+		rebuildAll: et,
 		timeline: i,
 		getScene: () => r
 	};

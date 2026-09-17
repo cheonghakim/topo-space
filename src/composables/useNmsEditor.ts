@@ -89,6 +89,8 @@ function createNmsEditorRuntime(
   let camera: CameraController;
   let _canvas: HTMLCanvasElement | null = null;
   let _mounted = false;
+  let _dataInitialized = false;
+  let _sceneRevision = 0;
   let _startPointer = { x: 0, y: 0 };
   let _isDragCandidate = false;
 
@@ -182,8 +184,10 @@ function createNmsEditorRuntime(
     if (_mounted) return;
     _canvas = canvas;
     _mounted = true;
+    const revision = ++_sceneRevision;
+    const mode = _dataInitialized ? ui.mode : (options.mode ?? ui.mode);
     editor.configureSecurity({
-      mode: options.mode ?? ui.mode,
+      mode,
       features: options.features,
       permissionResolver: options.permissionResolver,
       onPermissionDenied: (ctx) => {
@@ -192,7 +196,7 @@ function createNmsEditorRuntime(
       },
       onChange: options.onChange,
     });
-    ui.setMode(options.mode ?? ui.mode);
+    ui.setMode(mode);
     applyColorMode(ui.colorblindMode ? "colorblind" : "default");
 
     scene.init(canvas, overlay, wrapper, {
@@ -221,14 +225,20 @@ function createNmsEditorRuntime(
 
     gizmo = new ArrowGizmo(scene.scene);
 
-    if (options.data) editor.replaceData(options.data);
-    else if (options.mockData !== false) editor.loadMockData();
+    // Remounting the 3D canvas is navigation, not a new SDK data session.
+    if (!_dataInitialized) {
+      if (options.data) editor.replaceData(options.data);
+      else if (options.mockData !== false) editor.loadMockData();
+      _dataInitialized = true;
+    }
     _ensureActiveRootSpace();
     // Deferred to the same tick as the scene build: DOM elements the tour
     // points at (e.g. the campus-view switcher) only exist once Vue has
     // flushed the reactive state set just above.
-    nextTick(() => {
-      _buildScene();
+    nextTick(async () => {
+      if (!_mounted || revision !== _sceneRevision) return;
+      await _buildScene(revision);
+      if (!_mounted || revision !== _sceneRevision) return;
       _flyToFitScope();
       _maybeAutoStartTour();
     });
@@ -270,8 +280,9 @@ function createNmsEditorRuntime(
   // scope switch's rebuild has finished.
   let _pendingFocus: { type: "device" | "space"; id: string } | null = null;
 
-  async function _buildScene() {
+  async function _buildScene(revision: number) {
     await preloadCustomModels(deviceTypes.customTypes);
+    if (!_mounted || revision !== _sceneRevision) return;
     const scope = ui.activeRootSpaceId;
     space.loadSpaces(editor.scopedSpaces(scope));
     device.loadInstanced(editor.scopedDevices(scope), editor.mappings, (id) =>
@@ -283,7 +294,17 @@ function createNmsEditorRuntime(
     _syncParticles();
     vnode.loadNodes([...editor.virtualNodes.values()]);
     await background.loadObjects(editor.scopedBackgroundObjects(scope));
+    if (!_mounted || revision !== _sceneRevision) return;
     background.setEditMode(ui.backgroundEditActive);
+    _applyViewPreferences();
+  }
+
+  function _applyViewPreferences() {
+    device.setLabelScale(ui.fontScale);
+    applySearchFilter();
+    particle.setVisible(ui.showParticles);
+    const types: EdgeType[] = ["physical", "logical", "service_dependency", "traffic_flow", "security_path", "manual", "inferred"];
+    types.forEach(type => link.setVisible(type, ui.visibleLinkTypes.has(type)));
   }
 
   function _syncParticles() {
@@ -418,7 +439,7 @@ function createNmsEditorRuntime(
         () => ui.activeRootSpaceId,
         async () => {
           ui.select(null);
-          await rebuildAll();
+          if (!(await rebuildAll())) return;
           if (_pendingFocus) {
             const { type, id } = _pendingFocus;
             _pendingFocus = null;
@@ -1778,6 +1799,8 @@ function createNmsEditorRuntime(
   }
 
   async function rebuildAll() {
+    if (!_mounted) return;
+    const revision = ++_sceneRevision;
     _ensureActiveRootSpace();
     const scope = ui.activeRootSpaceId;
 
@@ -1789,6 +1812,7 @@ function createNmsEditorRuntime(
     device = new DeviceRenderer(scene.scene);
 
     await preloadCustomModels(deviceTypes.customTypes);
+    if (!_mounted || revision !== _sceneRevision) return;
 
     device.loadInstanced(editor.scopedDevices(scope), editor.mappings, (id) =>
       editor.getMappingByDeviceId(id),
@@ -1816,6 +1840,7 @@ function createNmsEditorRuntime(
     background.dispose();
     background = new BackgroundRenderer(scene.scene);
     await background.loadObjects(editor.scopedBackgroundObjects(scope));
+    if (!_mounted || revision !== _sceneRevision) return;
     background.setEditMode(ui.backgroundEditActive);
 
     raycast = new RaycastManager(scene.camera, device, space, link);
@@ -1827,7 +1852,9 @@ function createNmsEditorRuntime(
         useUIStore().showContextMenu(mx, my, srcId, tgtId),
     );
 
+    _applyViewPreferences();
     _flyToFitScope();
+    return true;
   }
 
   // Frames the camera around everything currently in scope instead of a fixed
@@ -1868,6 +1895,7 @@ function createNmsEditorRuntime(
 
   function dispose() {
     _mounted = false;
+    ++_sceneRevision;
     ui.offscreenAlerts = [];
     _watchStops.splice(0).forEach((stop) => stop());
     _canvas?.removeEventListener("pointerdown", onPointerDown);
@@ -1884,6 +1912,7 @@ function createNmsEditorRuntime(
     blast?.dispose();
     vnode?.dispose();
     flash?.dispose();
+    background?.dispose();
     camera.dispose();
     scene.dispose();
     _canvas = null;
