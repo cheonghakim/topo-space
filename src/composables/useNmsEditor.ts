@@ -99,6 +99,9 @@ function createNmsEditorRuntime(
   let _hoverMissStreak = 0;
   let _pointerOverCanvas = false;
   const _prevStatus = new Map<string, string>();
+  // warning/critical device ids, kept in sync by the status watcher below so
+  // the per-frame pulse loop doesn't have to walk every device each frame.
+  const _alertIds = new Set<string>();
   const _watchStops: WatchStopHandle[] = [];
   let options = initialOptions;
   let _fpsWindowStart = 0;
@@ -318,7 +321,11 @@ function createNmsEditorRuntime(
       ),
     );
 
-    editor.devices.forEach((d) => _prevStatus.set(d.id, d.status ?? "unknown"));
+    editor.devices.forEach((d) => {
+      const cur = d.status ?? "unknown";
+      _prevStatus.set(d.id, cur);
+      if (cur === "warning" || cur === "critical") _alertIds.add(d.id);
+    });
     _watchStops.push(
       watch(
         () => {
@@ -334,6 +341,9 @@ function createNmsEditorRuntime(
             const cur = d.status ?? "unknown";
             const prev = _prevStatus.get(d.id);
             device.updateStatus(d.id, cur);
+
+            if (cur === "warning" || cur === "critical") _alertIds.add(d.id);
+            else _alertIds.delete(d.id);
 
             if (prev !== undefined && prev !== cur) {
               const pos = device.getDeviceWorldPos(d.id);
@@ -355,14 +365,24 @@ function createNmsEditorRuntime(
             }
             _prevStatus.set(d.id, cur);
           });
+          // Devices removed from the store entirely never get visited above —
+          // prune any alert id that no longer has a backing device so the
+          // pulse loop doesn't keep animating a device that's gone.
+          if (_alertIds.size) {
+            for (const id of [..._alertIds]) {
+              if (!editor.devices.has(id)) _alertIds.delete(id);
+            }
+          }
           if (particleDirty) _syncParticles();
         },
       ),
     );
 
     _watchStops.push(
+      // linksRevision (not links.size) so an in-place edit — status, midX/midZ,
+      // type — is reflected too, not just an add/remove that changes the count.
       watch(
-        () => editor.links.size,
+        () => editor.linksRevision,
         () => rebuildLinks(),
       ),
     );
@@ -720,18 +740,21 @@ function createNmsEditorRuntime(
       if (ui.showParticles) particle.update(delta, ui.visibleLinkTypes);
       _updateOffscreenAlerts(elapsed);
 
-      // warning/critical pulse
+      // warning/critical pulse — walks _alertIds (kept in sync by the status
+      // watcher) instead of every device, so cost tracks alarm count, not
+      // total device count.
       if (!hasActiveFilter()) {
-        editor.devices.forEach((d) => {
-          if (d.status === "warning")
+        _alertIds.forEach((id) => {
+          const status = editor.devices.get(id)?.status;
+          if (status === "warning")
             device.pulseStatus(
-              d.id,
+              id,
               "warning",
               0.4 * Math.abs(Math.sin(elapsed * 1.6)),
             );
-          if (d.status === "critical")
+          else if (status === "critical")
             device.pulseStatus(
-              d.id,
+              id,
               "critical",
               0.7 * Math.abs(Math.sin(elapsed * 4.0)),
             );
@@ -999,14 +1022,17 @@ function createNmsEditorRuntime(
         const t = gizmo.currentTarget;
         if (t?.type === "device") {
           device.setPosition(t.id, newPos);
-          link.refreshPositions((id) => device.getDeviceWorldPos(id));
+          link.refreshPositionsFor([t.id], (id) => device.getDeviceWorldPos(id));
           _syncParticles();
         } else if (t?.type === "space") {
           space.setPosition(t.id, newPos);
           _spaceChildren.forEach((c) =>
             device.setPosition(c.id, newPos.clone().add(c.offset)),
           );
-          link.refreshPositions((id) => device.getDeviceWorldPos(id));
+          link.refreshPositionsFor(
+            _spaceChildren.map((c) => c.id),
+            (id) => device.getDeviceWorldPos(id),
+          );
           _syncParticles();
         } else if (t?.type === "background") {
           background.setPosition(t.id, newPos);
@@ -1071,6 +1097,7 @@ function createNmsEditorRuntime(
       const t = gizmo.currentTarget;
       const pos = gizmo.position;
       _saveUndo();
+      let movedDeviceIds: string[] = [];
       if (t?.type === "device") {
         editor.mapDevice(
           t.id,
@@ -1080,6 +1107,7 @@ function createNmsEditorRuntime(
         );
         editor.logChange("layout.update", `Device moved: ${t.id}`);
         ui.addToast("Device moved", "success");
+        movedDeviceIds = [t.id];
       } else if (t?.type === "space") {
         editor.updateSpace(t.id, {
           position: { x: pos.x, y: pos.y, z: pos.z },
@@ -1098,6 +1126,7 @@ function createNmsEditorRuntime(
           `Space moved: ${t.id} (+${_spaceChildren.length} devices)`,
         );
         ui.addToast("Space moved", "success");
+        movedDeviceIds = _spaceChildren.map((c) => c.id);
       } else if (t?.type === "background") {
         editor.updateBackgroundObject(t.id, {
           position: { x: pos.x, y: pos.y, z: pos.z },
@@ -1105,9 +1134,12 @@ function createNmsEditorRuntime(
         editor.logChange("background.update", `Background moved: ${t.id}`);
         ui.addToast("Background moved", "success");
       }
-      // Refresh link positions instead of full rebuild (keeps manual routing, cheaper)
-      link.refreshPositions((id) => device.getDeviceWorldPos(id));
-      _syncParticles();
+      // Refresh only the links touching what actually moved (keeps manual
+      // routing, and stays cheap at 10k+ links instead of walking every link).
+      if (movedDeviceIds.length) {
+        link.refreshPositionsFor(movedDeviceIds, (id) => device.getDeviceWorldPos(id));
+        _syncParticles();
+      }
       _gizmoAxis = null;
       _gizmoStartDrag = null;
       _gizmoStartPos = null;
@@ -1155,7 +1187,8 @@ function createNmsEditorRuntime(
           );
           editor.logChange("layout.update", `Device moved: ${targetId}`);
           ui.addToast(`Device moved`, "success");
-          rebuildLinks();
+          link.refreshPositionsFor([targetId], (id) => device.getDeviceWorldPos(id));
+          _syncParticles();
         } else if (targetType === "space") {
           editor.updateSpace(targetId, {
             position: { x: newPos.x, y: 0, z: newPos.z },
@@ -1384,13 +1417,24 @@ function createNmsEditorRuntime(
     ui.blastSourceId = deviceId;
   }
 
+  // Incremental sync instead of a full dispose+reload: at 10k+ links, tearing
+  // down and recreating every Line2/geometry/material on any single link
+  // change (including in-place edits, now that this also fires off
+  // linksRevision) would be the dominant cost in the whole app. Only the
+  // ids that actually changed touch the renderer; unrelated links are left
+  // alone, and `link`/`raycast`/`linkDrag` never need to be recreated.
   function rebuildLinks() {
-    link.dispose();
-    link = new LinkRenderer(scene.scene);
-    _applyLinkResolution();
-    link.loadLinks([...editor.links.values()], (id) =>
-      device.getDeviceWorldPos(id),
-    );
+    const rendered = link.getRenderedLinkIds();
+    const getPos = (id: string) => device.getDeviceWorldPos(id);
+
+    rendered.forEach((id) => {
+      if (!editor.links.has(id)) link.removeLink(id);
+    });
+    editor.links.forEach((l) => {
+      if (rendered.has(l.id)) link.updateLink(l, getPos);
+      else link.addLink(l, getPos);
+    });
+
     const all: EdgeType[] = [
       "physical",
       "logical",
@@ -1402,14 +1446,6 @@ function createNmsEditorRuntime(
     ];
     all.forEach((t) => link.setVisible(t, ui.visibleLinkTypes.has(t)));
     _syncParticles();
-    raycast = new RaycastManager(scene.camera, device, space, link);
-    linkDrag = new LinkDragManager(
-      scene.camera,
-      link,
-      device,
-      (srcId, tgtId, mx, my) =>
-        useUIStore().showContextMenu(mx, my, srcId, tgtId),
-    );
   }
 
   function dropDeviceAt(deviceId: string, e: DragEvent) {
@@ -1720,6 +1756,7 @@ function createNmsEditorRuntime(
     scene.dispose();
     _canvas = null;
     _prevStatus.clear();
+    _alertIds.clear();
   }
 
   function onContextMenu(e: MouseEvent) {

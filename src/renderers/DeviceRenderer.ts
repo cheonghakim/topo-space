@@ -6,6 +6,16 @@ import { getDeviceGeometry, disposeGeometryCache } from '@/utils/geometryFactory
 
 const _matCache = new Map<string, THREE.MeshStandardMaterial>()
 
+// Status badges (unlike search/type labels) had no cap, so a mass incident
+// (thousands of devices going warning/critical at once) turned into
+// thousands of live DOM nodes. Cap it like the other label sets, evicting
+// the least-severe shown badge to make room for a more severe one once full.
+const MAX_STATUS_BADGES = 200
+const BADGE_SEVERITY: Record<DeviceStatus, number> = {
+  critical: 5, offline: 5, warning: 4, stale: 3, maintenance: 2,
+  unknown: 1, acknowledged: 1, normal: 0,
+}
+
 function getMaterial(type: string): THREE.MeshStandardMaterial {
   if (!_matCache.has(type)) {
     _matCache.set(type, new THREE.MeshStandardMaterial({
@@ -48,6 +58,7 @@ export class DeviceRenderer {
   // non-normal device, plus an ack checkmark. Never gated on search/dim state:
   // status must stay legible regardless of what else is happening on screen.
   private statusBadges    = new Map<string, CSS2DObject>()
+  private badgeSeverity   = new Map<string, number>()
   private ackedIds        = new Set<string>()
 
   // The app's font-scale preference deliberately excludes the 3D canvas
@@ -79,6 +90,7 @@ export class DeviceRenderer {
       this.scene.remove(existing)
       existing.element.remove()
       this.statusBadges.delete(deviceId)
+      this.badgeSeverity.delete(deviceId)
     }
 
     const acked = this.ackedIds.has(deviceId)
@@ -87,6 +99,24 @@ export class DeviceRenderer {
 
     const pos = this.getDeviceWorldPos(deviceId)
     if (!pos) return
+
+    const severity = BADGE_SEVERITY[status] ?? 0
+    if (this.statusBadges.size >= MAX_STATUS_BADGES) {
+      let weakestId: string | null = null
+      let weakestSeverity = Infinity
+      this.badgeSeverity.forEach((s, id) => {
+        if (s < weakestSeverity) { weakestSeverity = s; weakestId = id }
+      })
+      // Full, and every shown badge is at least as severe as this one — skip
+      // rather than evict; a "+N more" summary is left to the space-level
+      // badge rather than growing this set unbounded.
+      if (weakestId === null || weakestSeverity >= severity) return
+      const evicted = this.statusBadges.get(weakestId)!
+      this.scene.remove(evicted)
+      evicted.element.remove()
+      this.statusBadges.delete(weakestId)
+      this.badgeSeverity.delete(weakestId)
+    }
 
     const el = document.createElement('div')
     el.className = 'device-status-badge'
@@ -109,6 +139,7 @@ export class DeviceRenderer {
     badge.position.copy(pos).add(new THREE.Vector3(0, 1.3, 0))
     this.scene.add(badge)
     this.statusBadges.set(deviceId, badge)
+    this.badgeSeverity.set(deviceId, severity)
   }
 
   setAcknowledged(deviceId: string, acked: boolean) {
@@ -434,7 +465,10 @@ export class DeviceRenderer {
   setLabelScale(scale: number) {
     if (scale === this.labelScale) return
     this.labelScale = scale
-    this.statusBadges.forEach((_, id) => {
+    // Snapshot ids before iterating: _updateBadge deletes then re-adds this
+    // same key on `this.statusBadges`, and a live Map.forEach revisits a key
+    // that gets re-added mid-iteration — looping on it forever otherwise.
+    ;[...this.statusBadges.keys()].forEach((id) => {
       const status = this.statusMap.get(id)
       if (status) this._updateBadge(id, status)
     })
@@ -583,6 +617,7 @@ export class DeviceRenderer {
       badge.element.remove()
     })
     this.statusBadges.clear()
+    this.badgeSeverity.clear()
     this.ackedIds.clear()
     if (this.selectionRing) {
       this.scene.remove(this.selectionRing)

@@ -8,6 +8,7 @@ import { LINK_STYLE } from '@/utils/colorUtils'
 const LINK_Y     = 0.45   // fallback height (preview / ground plane)
 const ENDPOINT_LIFT = 0.1 // raise the link slightly above the device top
 const DASH_FLOW_SPEED = 1.4 // world-units/sec the dash pattern travels along dashed links
+const PARALLEL_OFFSET = 0.5 // world-units between auto-spread parallel links sharing a device pair
 
 interface LinkObj {
   group:    THREE.Group
@@ -27,6 +28,18 @@ function flatten(path: THREE.Vector3[]): number[] {
 export class LinkRenderer {
   private scene: THREE.Scene
   private objects = new Map<string, LinkObj>()
+  // deviceId -> ids of links touching it. Lets a single device move (drag,
+  // gizmo) refresh only its own links instead of walking every link in the
+  // scene — critical once link count reaches into the thousands.
+  private byDevice = new Map<string, Set<string>>()
+  // Unordered device-pair key -> ids of links between that pair with no
+  // manual midX/midZ. Used to deterministically spread parallel links apart
+  // instead of letting them overlap exactly.
+  private byPair = new Map<string, Set<string>>()
+  // Ids whose material needs a per-frame touch (down-pulse or dash-flow).
+  // update() only walks this subset instead of every link — most links in a
+  // large graph are static (up, non-dashed) and cost nothing per frame.
+  private animated = new Set<string>()
   private previewLine: Line2 | null = null
   private _elapsed = 0
   private _resolution = new THREE.Vector2(1, 1)
@@ -36,6 +49,65 @@ export class LinkRenderer {
 
   loadLinks(links: NetworkLink[], getPos: (id: string) => THREE.Vector3 | null) {
     links.forEach(l => this.addLink(l, getPos))
+  }
+
+  private _pairKey(link: NetworkLink): string {
+    return [link.sourceDeviceId, link.targetDeviceId].sort().join('|')
+  }
+
+  private _index(link: NetworkLink) {
+    for (const deviceId of [link.sourceDeviceId, link.targetDeviceId]) {
+      let set = this.byDevice.get(deviceId)
+      if (!set) { set = new Set(); this.byDevice.set(deviceId, set) }
+      set.add(link.id)
+    }
+    if (link.midX === undefined && link.midZ === undefined) {
+      const key = this._pairKey(link)
+      let set = this.byPair.get(key)
+      if (!set) { set = new Set(); this.byPair.set(key, set) }
+      set.add(link.id)
+    }
+  }
+
+  private _unindex(link: NetworkLink) {
+    for (const deviceId of [link.sourceDeviceId, link.targetDeviceId]) {
+      const set = this.byDevice.get(deviceId)
+      if (!set) continue
+      set.delete(link.id)
+      if (!set.size) this.byDevice.delete(deviceId)
+    }
+    const key = this._pairKey(link)
+    const pairSet = this.byPair.get(key)
+    if (pairSet) {
+      pairSet.delete(link.id)
+      if (!pairSet.size) this.byPair.delete(key)
+    }
+  }
+
+  // Deterministic path midpoint: honors a manually-set midX/midZ, otherwise
+  // spreads links that share the same device pair apart (alternating sides,
+  // growing offset) so they don't render as one indistinguishable overlapping
+  // line. Ordinal is derived by sorting sibling ids, not insertion order, so
+  // it's stable regardless of add/remove sequence.
+  private _parallelMidpoint(link: NetworkLink, a: THREE.Vector3, b: THREE.Vector3): { midX: number; midZ: number } {
+    const baseMidX = (a.x + b.x) / 2
+    const baseMidZ = (a.z + b.z) / 2
+    if (link.midX !== undefined && link.midZ !== undefined) {
+      return { midX: link.midX, midZ: link.midZ }
+    }
+
+    const siblingIds = [...(this.byPair.get(this._pairKey(link)) ?? [])]
+    if (!siblingIds.includes(link.id)) siblingIds.push(link.id)
+    siblingIds.sort()
+    const ordinal = siblingIds.indexOf(link.id)
+    if (ordinal <= 0) return { midX: baseMidX, midZ: baseMidZ }
+
+    const step = Math.ceil(ordinal / 2) * PARALLEL_OFFSET
+    const side = ordinal % 2 === 1 ? 1 : -1
+    const dx = b.x - a.x, dz = b.z - a.z
+    const len = Math.hypot(dx, dz) || 1
+    const px = -dz / len, pz = dx / len // perpendicular unit vector, XZ plane
+    return { midX: baseMidX + px * step * side, midZ: baseMidZ + pz * step * side }
   }
 
   // Endpoints follow each device's Y; the middle corner uses the average so the
@@ -65,15 +137,26 @@ export class LinkRenderer {
     if (this.previewLine) (this.previewLine.material as LineMaterial).resolution.set(width, height)
   }
 
+  private _syncAnimated(obj: LinkObj) {
+    const needsAnimation = obj.link.status === 'down' || (obj.line.material as LineMaterial).dashed
+    if (needsAnimation) this.animated.add(obj.link.id)
+    else this.animated.delete(obj.link.id)
+  }
+
+  private _styleFor(link: NetworkLink) {
+    const style = LINK_STYLE[link.type] ?? LINK_STYLE.manual
+    const color = link.status === 'down' ? '#ef4444' : style.color
+    const linewidth = link.type === 'physical' || link.type === 'security_path' ? 2.5 : 2
+    return { style, color, linewidth }
+  }
+
   addLink(link: NetworkLink, getPos: (id: string) => THREE.Vector3 | null) {
     const aPos = getPos(link.sourceDeviceId)
     const bPos = getPos(link.targetDeviceId)
     if (!aPos || !bPos) return
 
-    const style = LINK_STYLE[link.type] ?? LINK_STYLE.manual
-    const color = link.status === 'down' ? '#ef4444' : style.color
-    const midX  = link.midX ?? (aPos.x + bPos.x) / 2
-    const midZ  = link.midZ ?? (aPos.z + bPos.z) / 2
+    const { style, color, linewidth } = this._styleFor(link)
+    const { midX, midZ } = this._parallelMidpoint(link, aPos, bPos)
     const path  = this.buildPath(aPos, bPos, midX, midZ)
 
     // Line
@@ -83,7 +166,7 @@ export class LinkRenderer {
       color: new THREE.Color(color).getHex(),
       transparent: true,
       opacity: style.opacity,
-      linewidth: link.type === 'physical' || link.type === 'security_path' ? 2.5 : 2,
+      linewidth,
       dashed: style.dashed,
       dashSize: 0.35,
       gapSize: 0.22,
@@ -114,6 +197,8 @@ export class LinkRenderer {
       group, line, handle, link, path,
       endpoints: { a: aPos.clone(), b: bPos.clone() },
     })
+    this._index(link)
+    this._syncAnimated(this.objects.get(link.id)!)
   }
 
   removeLink(id: string) {
@@ -124,12 +209,50 @@ export class LinkRenderer {
     obj.handle.geometry.dispose()
     ;(obj.line.material as THREE.Material).dispose()
     ;(obj.handle.material as THREE.Material).dispose()
+    this._unindex(obj.link)
+    this.animated.delete(id)
     this.objects.delete(id)
+  }
+
+  getRenderedLinkIds(): Set<string> {
+    return new Set(this.objects.keys())
+  }
+
+  // Applies a (possibly new) NetworkLink object's data — style, status color,
+  // and path — onto the already-rendered link with the same id. Used for
+  // in-place upserts so a full teardown/rebuild isn't needed just because a
+  // link's fields changed. Falls back to addLink if it isn't rendered yet.
+  updateLink(link: NetworkLink, getPos: (id: string) => THREE.Vector3 | null) {
+    const obj = this.objects.get(link.id)
+    if (!obj) { this.addLink(link, getPos); return }
+
+    if (obj.link !== link) {
+      this._unindex(obj.link)
+      obj.link = link
+      this._index(link)
+    }
+
+    const { style, color, linewidth } = this._styleFor(link)
+    const mat = obj.line.material as LineMaterial
+    mat.color.set(color)
+    mat.opacity = link.id === this.highlightedId ? 1.0 : style.opacity
+    mat.linewidth = linewidth
+    mat.dashed = style.dashed
+    this._syncAnimated(obj)
+
+    this._refreshOne(obj, getPos)
   }
 
   updateMidpoint(linkId: string, newX: number, newZ: number) {
     const obj = this.objects.get(linkId)
     if (!obj) return
+    // First manual bend: this link no longer participates in parallel-edge
+    // auto-spread, so drop it from the pair index.
+    if (obj.link.midX === undefined && obj.link.midZ === undefined) {
+      const key = this._pairKey(obj.link)
+      const set = this.byPair.get(key)
+      if (set) { set.delete(linkId); if (!set.size) this.byPair.delete(key) }
+    }
     obj.link.midX = newX
     obj.link.midZ = newZ
     const newPath = this.buildPath(obj.endpoints.a, obj.endpoints.b, newX, newZ)
@@ -139,22 +262,36 @@ export class LinkRenderer {
     obj.handle.position.set(newX, this.midY(obj.endpoints.a, obj.endpoints.b), newZ)
   }
 
+  private _refreshOne(obj: LinkObj, getPos: (id: string) => THREE.Vector3 | null) {
+    const a = getPos(obj.link.sourceDeviceId)
+    const b = getPos(obj.link.targetDeviceId)
+    if (!a || !b) return
+    obj.endpoints.a = a.clone()
+    obj.endpoints.b = b.clone()
+    const { midX, midZ } = this._parallelMidpoint(obj.link, a, b)
+    const newPath = this.buildPath(a, b, midX, midZ)
+    obj.path = newPath
+
+    obj.line.geometry.setPositions(flatten(newPath))
+    obj.line.computeLineDistances()
+
+    obj.handle.position.set(midX, this.midY(a, b), midZ)
+  }
+
   refreshPositions(getPos: (id: string) => THREE.Vector3 | null) {
-    this.objects.forEach(obj => {
-      const a = getPos(obj.link.sourceDeviceId)
-      const b = getPos(obj.link.targetDeviceId)
-      if (!a || !b) return
-      obj.endpoints.a = a.clone()
-      obj.endpoints.b = b.clone()
-      const midX = obj.link.midX ?? (a.x + b.x) / 2
-      const midZ = obj.link.midZ ?? (a.z + b.z) / 2
-      const newPath = this.buildPath(a, b, midX, midZ)
-      obj.path = newPath
+    this.objects.forEach(obj => this._refreshOne(obj, getPos))
+  }
 
-      obj.line.geometry.setPositions(flatten(newPath))
-      obj.line.computeLineDistances()
-
-      obj.handle.position.set(midX, this.midY(a, b), midZ)
+  // Refreshes only the links touching the given devices — O(degree) instead
+  // of O(all links). Use this for single/few-device drags at scale.
+  refreshPositionsFor(deviceIds: Iterable<string>, getPos: (id: string) => THREE.Vector3 | null) {
+    const linkIds = new Set<string>()
+    for (const deviceId of deviceIds) {
+      this.byDevice.get(deviceId)?.forEach(id => linkIds.add(id))
+    }
+    linkIds.forEach(id => {
+      const obj = this.objects.get(id)
+      if (obj) this._refreshOne(obj, getPos)
     })
   }
 
@@ -220,14 +357,18 @@ export class LinkRenderer {
 
   update(delta: number) {
     this._elapsed += delta
-    this.objects.forEach(({ line, link }) => {
-      const mat = line.material as LineMaterial
-      if (link.status === 'down') {
+    // Only the down/dashed subset needs a per-frame touch — most links in a
+    // large graph are static and are skipped entirely (see `animated`).
+    this.animated.forEach(id => {
+      const obj = this.objects.get(id)
+      if (!obj) { this.animated.delete(id); return }
+      const mat = obj.line.material as LineMaterial
+      if (obj.link.status === 'down') {
         // Held at full opacity while hovered — otherwise this pulse fights
         // setHighlight's one-shot opacity write every frame and the
         // highlight flickers, the same conflict pulseStatus had with device
         // hover before it was moved to a ring (see DeviceRenderer.setHighlight).
-        mat.opacity = link.id === this.highlightedId
+        mat.opacity = obj.link.id === this.highlightedId
           ? 1.0
           : 0.25 + 0.35 * Math.abs(Math.sin(this._elapsed * 2.5))
       } else if (mat.dashed) {
@@ -289,6 +430,9 @@ export class LinkRenderer {
       ;(handle.material as THREE.Material).dispose()
     })
     this.objects.clear()
+    this.byDevice.clear()
+    this.byPair.clear()
+    this.animated.clear()
     this.highlightedId = null
     if (this.previewLine) {
       this.scene.remove(this.previewLine)

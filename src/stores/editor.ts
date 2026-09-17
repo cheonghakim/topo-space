@@ -28,6 +28,12 @@ export const useEditorStore = defineStore('editor', () => {
   const links      = ref<Map<string, NetworkLink>>(new Map())
   const interfaces = ref<Map<string, NetworkInterface>>(new Map())
 
+  // Bumped on every link add/remove/in-place-update (status, midX/midZ, etc).
+  // A cheap O(1) signal the renderer can watch instead of `links.size`, which
+  // misses in-place edits that don't change the link count.
+  const linksRevision = ref(0)
+  function _bumpLinksRevision() { linksRevision.value++ }
+
   const unmappedDevices  = ref<RawDevice[]>([])
   const virtualNodes     = ref<Map<string, VirtualNode>>(new Map())
   const backgroundObjects = ref<Map<string, BackgroundObject>>(new Map())
@@ -252,6 +258,7 @@ export const useEditorStore = defineStore('editor', () => {
   function updateLinkStatus(id: string, status: NetworkLink['status']) {
     const l = links.value.get(id)
     if (l) l.status = status
+    _bumpLinksRevision()
   }
 
   function upsertDevices(incoming: RawDevice[]) {
@@ -276,12 +283,15 @@ export const useEditorStore = defineStore('editor', () => {
       const mapEntry = [...mappings.value.entries()].find(([, m]) => m.rawDeviceId === id)
       if (mapEntry) mappings.value.delete(mapEntry[0])
     })
+    let linksChanged = false
     ;[...links.value.entries()].forEach(([linkId, l]) => {
       if (idSet.has(l.sourceDeviceId) || idSet.has(l.targetDeviceId)) {
         links.value.delete(linkId)
+        linksChanged = true
         emitChange('topology:deleteLink', { id: linkId, type: 'link' }, 'api')
       }
     })
+    if (linksChanged) _bumpLinksRevision()
     ids.forEach(id => emitChange('device:unmap', { id, type: 'device' }, 'api'))
   }
 
@@ -294,6 +304,7 @@ export const useEditorStore = defineStore('editor', () => {
       links.value.set(l.id, l)
       emitChange('topology:updateLink', { id: l.id, type: 'link' }, 'api')
     })
+    if (incoming.length) _bumpLinksRevision()
   }
 
   function removeLinks(ids: string[]) {
@@ -301,6 +312,7 @@ export const useEditorStore = defineStore('editor', () => {
       links.value.delete(id)
       emitChange('topology:deleteLink', { id, type: 'link' }, 'api')
     })
+    if (ids.length) _bumpLinksRevision()
   }
 
   function upsertSpaces(incoming: Space[]) {
@@ -492,6 +504,7 @@ export const useEditorStore = defineStore('editor', () => {
   function addLink(link: NetworkLink) {
     if (!requirePermission('topology:createLink', { id: link.id })) return
     links.value.set(link.id, link)
+    _bumpLinksRevision()
     emitChange('topology:createLink', { id: link.id, type: 'link' })
   }
 
@@ -499,12 +512,14 @@ export const useEditorStore = defineStore('editor', () => {
     if (!requirePermission('topology:updateLink', { id })) return
     const l = links.value.get(id)
     if (l) Object.assign(l, patch)
+    _bumpLinksRevision()
     emitChange('topology:updateLink', { id, type: 'link' })
   }
 
   function removeLink(id: string) {
     if (!requirePermission('topology:deleteLink', { id })) return
     links.value.delete(id)
+    _bumpLinksRevision()
     emitChange('topology:deleteLink', { id, type: 'link' })
   }
 
@@ -827,7 +842,7 @@ export const useEditorStore = defineStore('editor', () => {
   }
 
   return {
-    devices, spaces, mappings, links, interfaces, unmappedDevices,
+    devices, spaces, mappings, links, interfaces, unmappedDevices, linksRevision,
     mappedDeviceIds, criticalCount, warningCount,
     devicesBySpace, interfacesByDevice, rackSpaces, allSpacesList,
     rootSpaces, childSpaces, descendantSpaceIds,
