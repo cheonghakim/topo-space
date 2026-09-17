@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { Space } from '@/types'
+import { layoutLabels, type LabelCandidate, type LabelRect } from '@/utils/labelLayout'
 
 const SPACE_COLORS: Record<string, { floor: number; edge: number }> = {
   building:      { floor: 0x0d1526, edge: 0x1a2a4a },
@@ -20,6 +21,8 @@ interface SpaceObj { group: THREE.Group; hitMesh: THREE.Mesh; badgeEl: HTMLDivEl
 export class SpaceRenderer {
   private scene: THREE.Scene
   private objects = new Map<string, SpaceObj>()
+  private selectedIds = new Set<string>()
+  private labelSizes = new WeakMap<HTMLElement, { text: string | null; width: number; height: number }>()
 
   constructor(scene: THREE.Scene) { this.scene = scene }
 
@@ -52,9 +55,12 @@ export class SpaceRenderer {
       padding:2px 7px;font-size:10px;font-family:monospace;color:#94a3b8;
       white-space:nowrap;pointer-events:none;`
     badgeEl.textContent = space.name
+    badgeEl.title = space.name
+    badgeEl.dataset.spaceId = space.id
 
     const badge = new CSS2DObject(badgeEl)
-    badge.position.set(0, (space.type === 'rack' ? 1.0 : 0.8), 0)
+    // Keep rack names at the aisle edge, away from alarm badges over devices.
+    badge.position.set(0, 0.3, size.depth / 2 + 0.35)
     badge.visible = this.shouldShowBadge(space.type, space.source)
     group.add(badge)
 
@@ -95,22 +101,33 @@ export class SpaceRenderer {
 
   private _buildSite(group: THREE.Group, space: Space, size: Size3DLike, colors: { floor: number; edge: number }) {
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(size.width, size.depth),
+      new THREE.BoxGeometry(size.width, 0.28, size.depth),
       new THREE.MeshStandardMaterial({
-        color: colors.floor, transparent: true, opacity: 0.18, roughness: 1,
+        color: space.color ?? 0x17253b, roughness: 0.9,
         polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
       }),
     )
-    floor.rotation.x = -Math.PI / 2
-    floor.position.y = 0.05
+    floor.position.y = -0.09
+    floor.receiveShadow = true
+    floor.castShadow = true
     group.add(floor)
+    // A subtle architectural grid conveys scale without an image texture.
+    const points: THREE.Vector3[] = []
+    const spacing = Math.max(2, Math.max(size.width, size.depth) / 40)
+    for (let x = -size.width / 2 + spacing; x < size.width / 2; x += spacing) {
+      points.push(new THREE.Vector3(x, 0.055, -size.depth / 2), new THREE.Vector3(x, 0.055, size.depth / 2))
+    }
+    for (let z = -size.depth / 2 + spacing; z < size.depth / 2; z += spacing) {
+      points.push(new THREE.Vector3(-size.width / 2, 0.055, z), new THREE.Vector3(size.width / 2, 0.055, z))
+    }
+    group.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: 0x344860, transparent: true, opacity: 0.32 })))
     // border
     const border = new THREE.LineLoop(
       new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-size.width/2, 0.01, -size.depth/2),
-        new THREE.Vector3( size.width/2, 0.01, -size.depth/2),
-        new THREE.Vector3( size.width/2, 0.01,  size.depth/2),
-        new THREE.Vector3(-size.width/2, 0.01,  size.depth/2),
+        new THREE.Vector3(-size.width/2, 0.06, -size.depth/2),
+        new THREE.Vector3( size.width/2, 0.06, -size.depth/2),
+        new THREE.Vector3( size.width/2, 0.06,  size.depth/2),
+        new THREE.Vector3(-size.width/2, 0.06,  size.depth/2),
       ]),
       new THREE.LineBasicMaterial({ color: colors.edge, transparent: true, opacity: 0.5 }),
     )
@@ -132,13 +149,17 @@ export class SpaceRenderer {
 
     const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(size.width, 0.02, size.depth))
     const edgeLine = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: colors.edge, transparent: true, opacity: 0.5 }))
-    edgeLine.position.y = 0.01
+    edgeLine.position.y = 0.13
     group.add(edgeLine)
   }
 
   setSelected(spaceId: string, on: boolean) {
     const obj = this.objects.get(spaceId)
     if (!obj) return
+    if (on) this.selectedIds.add(spaceId)
+    else this.selectedIds.delete(spaceId)
+    obj.badgeEl.style.borderColor = on ? '#7dd3fc' : '#2a4a8a'
+    obj.badgeEl.style.color = on ? '#e0f2fe' : '#b4c5dc'
     const frame = obj.group.children.find(c => c instanceof THREE.Mesh && c !== obj.hitMesh) as THREE.Mesh | undefined
     if (frame) {
       const mat = frame.material as THREE.MeshStandardMaterial
@@ -152,20 +173,47 @@ export class SpaceRenderer {
 
   updateBadge(spaceId: string, text: string) {
     const obj = this.objects.get(spaceId)
-    if (obj) obj.badgeEl.textContent = text
+    if (obj) { obj.badgeEl.textContent = text; obj.badgeEl.title = text }
   }
 
   applyBadgeLod(cameraDistance = 0) {
     this.objects.forEach((obj) => {
       const type = obj.hitMesh.userData.spaceType as Space['type']
       const source = obj.hitMesh.userData.spaceSource as Space['source'] | undefined
-      obj.badge.visible = this.shouldShowBadge(type, source, cameraDistance)
+      obj.badge.visible = this.selectedIds.has(obj.group.userData.spaceId) || this.shouldShowBadge(type, source, cameraDistance)
     })
   }
 
-  updateLod(camera: THREE.Camera, controlsTarget: THREE.Vector3) {
+  updateLod(camera: THREE.Camera, controlsTarget: THREE.Vector3, viewport?: { width: number; height: number }, obstacles: CSS2DObject[] = [], reserved: LabelRect[] = []) {
     const dist = camera.position.distanceTo(controlsTarget)
     this.applyBadgeLod(dist)
+    if (!viewport) return
+    camera.updateMatrixWorld()
+    const project = (label: CSS2DObject): LabelRect | null => {
+      const point = label.getWorldPosition(new THREE.Vector3()).project(camera)
+      if (point.z < -1 || point.z > 1 || !Number.isFinite(point.x + point.y)) return null
+      // offsetWidth still measures visibility:hidden elements, unlike display:none.
+      const element = label.element
+      let measured = this.labelSizes.get(element)
+      if (!measured || measured.text !== element.textContent) {
+        const width = element.offsetWidth, height = element.offsetHeight
+        measured = { text: element.textContent, width: width || (element.textContent?.length ?? 0) * 6.5 + 16, height: height || 20 }
+        if (width && height) this.labelSizes.set(element, measured)
+      }
+      const { width, height } = measured
+      return { x: (point.x + 1) * viewport.width / 2 - width / 2, y: (1 - point.y) * viewport.height / 2 - height / 2, width, height }
+    }
+    const occupied = obstacles.filter(label => label.visible).map(project).filter((rect): rect is LabelRect => rect !== null)
+    const candidates: LabelCandidate[] = []
+    this.objects.forEach((obj, id) => {
+      if (!obj.badge.visible) return
+      const rect = project(obj.badge)
+      if (rect) candidates.push({ ...rect, id, priority: this.selectedIds.has(id) ? 100 : obj.hitMesh.userData.spaceType === 'rack' ? 40 : 20 })
+    })
+    const visible = layoutLabels(candidates, viewport.width, viewport.height, [...occupied, ...reserved])
+    this.objects.forEach((obj, id) => {
+      obj.badgeEl.style.visibility = visible.has(id) ? 'visible' : 'hidden'
+    })
   }
 
   setPosition(spaceId: string, pos: THREE.Vector3) {
@@ -179,6 +227,7 @@ export class SpaceRenderer {
     if (!obj) return
     this.disposeSpaceObject(obj)
     this.objects.delete(spaceId)
+    this.selectedIds.delete(spaceId)
     this.applyBadgeLod()
   }
 
@@ -193,20 +242,18 @@ export class SpaceRenderer {
   }
 
   private shouldShowBadge(type: Space['type'], source?: Space['source'], cameraDistance = 0): boolean {
-    const count = this.objects.size
     if (type === 'site' || type === 'floor' || type === 'building') return true
     if (type === 'rack' && source === 'import') return false
-    // Distance-based LOD: hide detail labels when camera is far
+    // Screen-space collision culling handles density; do not hide all rack
+    // names merely because the dataset contains many spaces.
     if (cameraDistance > 120) return false
-    if (cameraDistance > 70) return type !== 'rack'
-    if (count > 120) return false
-    if (count > 60) return type !== 'rack'
     return type === 'rack' || type === 'zone' || type === 'cloud'
   }
 
   dispose() {
     this.objects.forEach(obj => this.disposeSpaceObject(obj))
     this.objects.clear()
+    this.selectedIds.clear()
   }
 
   private disposeSpaceObject(obj: SpaceObj) {

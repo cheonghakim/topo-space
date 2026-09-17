@@ -26,6 +26,7 @@
         />
 
         <ViewSwitcher v-if="ui.viewMode === '3d'" />
+        <StatusLegend />
 
         <MinimapPanel
           v-if="ui.viewMode === '3d' && sceneReady && ui.showMinimap"
@@ -107,6 +108,7 @@ import ToastPanel        from '@/components/ui/ToastPanel.vue'
 import HelpPanel         from '@/components/ui/HelpPanel.vue'
 import ImportPanel       from '@/components/ui/ImportPanel.vue'
 import ViewSwitcher      from '@/components/ui/ViewSwitcher.vue'
+import StatusLegend      from '@/components/ui/StatusLegend.vue'
 import { useUIStore }    from '@/stores/ui'
 import { useEditorStore } from '@/stores/editor'
 import { useNmsEditor } from '@/composables/useNmsEditor'
@@ -174,13 +176,13 @@ watch(() => ui.fontScale, (v) => {
 
 <style scoped>
 .app {
-  display: flex; flex-direction: column; height: 100vh;
+  display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; overflow: hidden;
   background: #080c18; color: #e2e8f0;
   font-family: -apple-system, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 .workspace { display: flex; flex: 1; overflow: hidden; position: relative; }
-.canvas-wrap { flex: 1; position: relative; min-width: 0; }
+.canvas-wrap { flex: 1; position: relative; min-width: 0; container-type: size; }
 
 .left-dock {
   flex: 0 0 auto;
@@ -188,12 +190,10 @@ watch(() => ui.fontScale, (v) => {
   border-right: 1px solid #1a2a4a;
   background: rgba(8, 12, 24, 0.96);
 }
-/* Right dock floats over the canvas and only takes the height of its content.
-   When its panels are short, the canvas behind it stays visible — no awkward
-   empty space below. */
+/* Reserve space for details so they never cover navigation or selected devices. */
 .right-dock {
-  position: absolute; top: 0; right: 0;
-  width: 290px; max-height: 100%;
+  position: relative;
+  flex: 0 0 290px; width: 290px; max-height: 100%;
   display: flex; flex-direction: column;
   overflow-y: auto; overflow-x: hidden;
   border-left: 1px solid #1a2a4a;

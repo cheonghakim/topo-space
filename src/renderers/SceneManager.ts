@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer }  from 'three/addons/renderers/CSS2DRenderer.js'
+import type { LabelRect } from '@/utils/labelLayout'
 
 export class SceneManager {
   scene!:         THREE.Scene
@@ -33,6 +34,7 @@ export class SceneManager {
     })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.shadowMap.enabled = true
+    this.renderer.shadowMap.type = THREE.PCFShadowMap
 
     this.css2dRenderer = new CSS2DRenderer()
     this.css2dRenderer.domElement.style.cssText =
@@ -53,6 +55,8 @@ export class SceneManager {
     this.controls.maxPolarAngle  = Math.PI / 2.05
     this.controls.minDistance    = 3
     this.controls.maxDistance    = 220
+    this.controls.zoomToCursor   = true
+    this.controls.zoomSpeed      = 0.8
 
     this._setupLights()
     this._setupGrid()
@@ -65,11 +69,13 @@ export class SceneManager {
   }
 
   private _setupLights() {
-    this.scene.add(new THREE.AmbientLight(0x2a3a5c, 3.0))
+    this.scene.add(new THREE.HemisphereLight(0xc9e1ff, 0x253149, 2.0))
     const sun = new THREE.DirectionalLight(0xffffff, 2.0)
     sun.position.set(20, 60, 30)
     sun.castShadow = true
     sun.shadow.mapSize.set(2048, 2048)
+    sun.shadow.normalBias = 0.025
+    sun.shadow.camera.far = 250
     sun.shadow.camera.left = -120; sun.shadow.camera.right  = 120
     sun.shadow.camera.top  =  120; sun.shadow.camera.bottom = -120
     this.scene.add(sun)
@@ -110,6 +116,17 @@ export class SceneManager {
     }
   }
 
+  getLabelExclusions(): LabelRect[] {
+    const origin = this._wrapper.getBoundingClientRect()
+    const chrome = this._wrapper.parentElement?.querySelectorAll<HTMLElement>(
+      '.camera-tools, .navigation-help, .status-legend, .mm-wrap, .vs-wrap, .hint',
+    ) ?? []
+    return Array.from(chrome, element => {
+      const rect = element.getBoundingClientRect()
+      return { x: rect.left - origin.left, y: rect.top - origin.top, width: rect.width, height: rect.height }
+    })
+  }
+
   // Fat lines (Line2/LineMaterial) need the renderer's pixel size to compute
   // a real, configurable line width — this lets renderers that use them
   // (LinkRenderer) stay in sync without SceneManager knowing about them.
@@ -139,7 +156,7 @@ export class SceneManager {
       this.renderer.render(this.scene, this.camera)
       this.css2dRenderer.render(this.scene, this.camera)
     }
-    requestAnimationFrame(loop)
+    this._animId = requestAnimationFrame(loop)
   }
 
   dispose() {

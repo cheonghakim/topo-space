@@ -6,7 +6,8 @@ import type {
   NetworkInterface, DeviceStatus, DeviceMetrics,
   VirtualNode, BackgroundObject, SavedView, EditorSnapshot,
   EditorAction, EditorData, EditorMode, FeatureFlags,
-  PermissionContext, PermissionResolver,
+  PermissionContext, PermissionResolver, OperatorState,
+  EditorEventPayload,
 } from '@/types'
 import { generateMockData } from '@/utils/mockDataGenerator'
 
@@ -19,7 +20,7 @@ export const useEditorStore = defineStore('editor', () => {
   // explicitly, same as it already must to disable topologyEdit/import/etc.
   const guard = new PermissionGuard({ topologyEdit: true, layoutEdit: true, spaceEdit: true, annotationEdit: true, import: true, backgroundEdit: true, chaosSimulator: true })
   let permissionDeniedHandler: ((ctx: PermissionContext) => void) | undefined
-  let changeHandler: ((event: { type: string; target?: { id?: string; type?: string }; source: 'user' | 'api' | 'plugin' | 'system'; timestamp: number }) => void) | undefined
+  let changeHandler: ((event: EditorEventPayload) => void) | undefined
 
   const devices    = ref<Map<string, RawDevice>>(new Map())
   const spaces     = ref<Map<string, Space>>(new Map())
@@ -38,7 +39,7 @@ export const useEditorStore = defineStore('editor', () => {
     features?: FeatureFlags
     permissionResolver?: PermissionResolver
     onPermissionDenied?: (ctx: PermissionContext) => void
-    onChange?: (event: { type: string; target?: { id?: string; type?: string }; source: 'user' | 'api' | 'plugin' | 'system'; timestamp: number }) => void
+    onChange?: (event: EditorEventPayload) => void
   }) {
     if (input.mode) guard.setMode(input.mode)
     if (input.features) guard.setFeatures(input.features)
@@ -70,8 +71,8 @@ export const useEditorStore = defineStore('editor', () => {
     return allowed
   }
 
-  function emitChange(type: string, target?: { id?: string; type?: string }) {
-    changeHandler?.({ type, target, source: 'user', timestamp: Date.now() })
+  function emitChange(type: string, target?: { id?: string; type?: string }, source: EditorEventPayload['source'] = 'user') {
+    changeHandler?.({ type, target, source, timestamp: Date.now() })
   }
 
   // ── Computed ──────────────────────────────────────────────────────────────
@@ -260,6 +261,97 @@ export const useEditorStore = defineStore('editor', () => {
       }
       devices.value.set(dev.id, dev)
     })
+  }
+
+  // Backend push — bypasses permission guard (same trust boundary as
+  // upsertDevices/updateDeviceStatus: this is the host's own already-trusted
+  // backend removing devices it owns, not a UI edit action). Also cleans up
+  // the device's mapping and any link that referenced it, so callers don't
+  // have to separately track down orphaned links/mappings.
+  function removeDevices(ids: string[]) {
+    const idSet = new Set(ids)
+    ids.forEach(id => {
+      devices.value.delete(id)
+      unmappedDevices.value = unmappedDevices.value.filter(d => d.id !== id)
+      const mapEntry = [...mappings.value.entries()].find(([, m]) => m.rawDeviceId === id)
+      if (mapEntry) mappings.value.delete(mapEntry[0])
+    })
+    ;[...links.value.entries()].forEach(([linkId, l]) => {
+      if (idSet.has(l.sourceDeviceId) || idSet.has(l.targetDeviceId)) {
+        links.value.delete(linkId)
+        emitChange('topology:deleteLink', { id: linkId, type: 'link' }, 'api')
+      }
+    })
+    ids.forEach(id => emitChange('device:unmap', { id, type: 'device' }, 'api'))
+  }
+
+  // ── Backend push: links/spaces/interfaces/virtualNodes ──────────────────
+  // These bypass the permission guard, unlike their addX/updateX counterparts
+  // below — a host's own backend pushing topology facts it discovered is a
+  // different trust boundary than a UI user editing the topology by hand.
+  function upsertLinks(incoming: NetworkLink[]) {
+    incoming.forEach(l => {
+      links.value.set(l.id, l)
+      emitChange('topology:updateLink', { id: l.id, type: 'link' }, 'api')
+    })
+  }
+
+  function removeLinks(ids: string[]) {
+    ids.forEach(id => {
+      links.value.delete(id)
+      emitChange('topology:deleteLink', { id, type: 'link' }, 'api')
+    })
+  }
+
+  function upsertSpaces(incoming: Space[]) {
+    incoming.forEach(s => {
+      spaces.value.set(s.id, s)
+      emitChange('space:update', { id: s.id, type: 'space' }, 'api')
+    })
+  }
+
+  // Soft delete (archived = true), matching archiveSpace's semantics, so a
+  // removed space doesn't leave dangling parentId references from children
+  // that are still mapped underneath it.
+  function removeSpaces(ids: string[]) {
+    ids.forEach(id => {
+      const s = spaces.value.get(id)
+      if (s) s.archived = true
+      emitChange('space:delete', { id, type: 'space' }, 'api')
+    })
+  }
+
+  function upsertInterfaces(incoming: NetworkInterface[]) {
+    incoming.forEach(i => {
+      interfaces.value.set(i.id, i)
+      emitChange('interface:update', { id: i.id, type: 'interface' }, 'api')
+    })
+  }
+
+  function upsertVirtualNodes(incoming: VirtualNode[]) {
+    incoming.forEach(n => {
+      virtualNodes.value.set(n.id, n)
+      emitChange('virtualNode:update', { id: n.id, type: 'virtualNode' }, 'api')
+    })
+  }
+
+  function removeVirtualNodes(ids: string[]) {
+    ids.forEach(id => {
+      virtualNodes.value.delete(id)
+      emitChange('virtualNode:delete', { id, type: 'virtualNode' }, 'api')
+    })
+  }
+
+  // Backend push — bypasses permission guard, unlike acknowledgeDevice/
+  // unacknowledgeDevice/assignDevice below (kept independent on purpose: they
+  // gate a UI operator action, this covers a backend syncing ack/maintenance/
+  // suppression state from elsewhere). Partial merge so one call can't
+  // clobber fields it doesn't mention.
+  function setOperatorState(deviceId: string, patch: Partial<OperatorState>) {
+    const m = getMappingByDeviceId(deviceId)
+    if (!m) return
+    m.operatorState = { ...m.operatorState, ...patch }
+    emitChange('annotation:update', { id: deviceId, type: 'device' }, 'api')
   }
 
   // Manual entry (fallback for devices not provided by an external source)
@@ -744,14 +836,19 @@ export const useEditorStore = defineStore('editor', () => {
     resolveLeafScope,
     configureSecurity, setEditorMode, can, hasFeature,
     loadMockData, replaceData, updateDeviceStatus, updateLinkStatus, upsertDevices, addManualDevice,
+    removeDevices,
     importTopology,
     addSpace, updateSpace, archiveSpace,
+    upsertSpaces, removeSpaces,
     mapDevice, unmapDevice, updateAnnotation, setVisualType,
-    acknowledgeDevice, unacknowledgeDevice, assignDevice,
+    acknowledgeDevice, unacknowledgeDevice, assignDevice, setOperatorState,
     addLink, updateLink, removeLink,
+    upsertLinks, removeLinks,
+    upsertInterfaces,
     getMappingByDeviceId, getDevice,
     virtualNodes, savedViews, changeLog,
     addVirtualNode, removeVirtualNode, updateVirtualNode,
+    upsertVirtualNodes, removeVirtualNodes,
     backgroundObjects,
     addBackgroundObject, removeBackgroundObject, updateBackgroundObject,
     addSavedView, removeSavedView,

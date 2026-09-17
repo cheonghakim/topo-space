@@ -1,12 +1,13 @@
 import * as THREE from 'three'
+import { reactive } from 'vue'
 import type { DeviceStatus, DeviceType, EdgeType } from '@/types'
 
 const _DEFAULT_STATUS_COLOR_HEX: Record<DeviceStatus, string> = {
   normal:       '#22c55e',
   warning:      '#eab308',
   critical:     '#ef4444',
-  offline:      '#374151',
-  unknown:      '#6b7280',
+  offline:      '#94a3b8',
+  unknown:      '#a1a1aa',
   maintenance:  '#3b82f6',
   acknowledged: '#f59e0b',
   stale:        '#78716c',
@@ -17,12 +18,12 @@ const _DEFAULT_STATUS_COLOR_HEX: Record<DeviceStatus, string> = {
 // users (~8% of men). This set relies on blue/yellow/vermillion instead,
 // distinguishable under protanopia and deuteranopia.
 const _COLORBLIND_STATUS_COLOR_HEX: Record<DeviceStatus, string> = {
-  normal:       '#0072b2',
+  normal:       '#56b4e9',
   warning:      '#f0e442',
-  critical:     '#d55e00',
-  offline:      '#374151',
+  critical:     '#e69f00',
+  offline:      '#94a3b8',
   unknown:      '#8a8a8a',
-  maintenance:  '#56b4e9',
+  maintenance:  '#cc79a7',
   acknowledged: '#009e73',
   stale:        '#999999',
 }
@@ -30,7 +31,7 @@ const _COLORBLIND_STATUS_COLOR_HEX: Record<DeviceStatus, string> = {
 // Mutable — `applyColorMode` swaps these values in place at runtime so every
 // module that captured a reference to this object (canvas renderers,
 // THREE.Color instances below) sees the new palette without re-importing.
-export const STATUS_COLOR_HEX: Record<DeviceStatus, string> = { ..._DEFAULT_STATUS_COLOR_HEX }
+export const STATUS_COLOR_HEX: Record<DeviceStatus, string> = reactive({ ..._DEFAULT_STATUS_COLOR_HEX })
 
 export const STATUS_COLOR_THREE: Record<DeviceStatus, THREE.Color> = Object.fromEntries(
   Object.entries(STATUS_COLOR_HEX).map(([k, v]) => [k, new THREE.Color(v)])

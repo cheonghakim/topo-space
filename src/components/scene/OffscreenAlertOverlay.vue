@@ -5,7 +5,7 @@
       :key="a.id"
       class="oa-arrow"
       :class="a.status"
-      :style="{ left: a.edgeX + 'px', top: a.edgeY + 'px', transform: `translate(-50%, -50%) rotate(${a.angle}deg)` }"
+      :style="{ left: a.edgeX + 'px', top: a.edgeY + 'px', transform: `translate(-50%, -50%) rotate(${a.angle}deg)`, background: STATUS_COLOR_HEX[a.status], boxShadow: `0 0 10px ${STATUS_COLOR_HEX[a.status]}99` }"
       :title="labelFor(a.id)"
       @click="onClick(a.id)"
     >▲</button>
@@ -16,6 +16,7 @@
 import { useUIStore } from '@/stores/ui'
 import { useEditorStore } from '@/stores/editor'
 import { useNmsEditor } from '@/composables/useNmsEditor'
+import { STATUS_COLOR_HEX } from '@/utils/colorUtils'
 
 const ui     = useUIStore()
 const editor = useEditorStore()

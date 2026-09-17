@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { RawDevice, DeviceMapping, DeviceStatus } from '@/types'
-import { STATUS_COLOR_THREE, STATUS_COLOR_HEX, STATUS_ICON, getTypeColor } from '@/utils/colorUtils'
+import { STATUS_COLOR_THREE, STATUS_COLOR_HEX, STATUS_ICON, STATUS_LABEL, getTypeAbbr, getTypeLabel } from '@/utils/colorUtils'
 import { getDeviceGeometry, disposeGeometryCache } from '@/utils/geometryFactory'
 
 const _matCache = new Map<string, THREE.MeshStandardMaterial>()
@@ -9,9 +9,10 @@ const _matCache = new Map<string, THREE.MeshStandardMaterial>()
 function getMaterial(type: string): THREE.MeshStandardMaterial {
   if (!_matCache.has(type)) {
     _matCache.set(type, new THREE.MeshStandardMaterial({
-      color: new THREE.Color(getTypeColor(type)),
-      roughness: 0.35,
-      metalness: 0.65,
+      // Multiplying a type tint by a status tint corrupts the status palette.
+      color: new THREE.Color(0xffffff),
+      roughness: 0.48,
+      metalness: 0.3,
       emissive: new THREE.Color(0x000000),
       emissiveIntensity: 0,
     }))
@@ -38,7 +39,10 @@ export class DeviceRenderer {
   private instanceColors  = new Map<string, THREE.Color>()
   private statusMap       = new Map<string, DeviceStatus>()
   private dimmedIds       = new Set<string>()
+  private hasFilter = false
   private searchLabels    = new Map<string, CSS2DObject>()
+  private typeLabels = new Map<string, CSS2DObject>()
+  private nextTypeLabelUpdate = 0
 
   // Non-color status redundancy — a small icon badge shown above every
   // non-normal device, plus an ack checkmark. Never gated on search/dim state:
@@ -56,6 +60,11 @@ export class DeviceRenderer {
 
   private selectionRing: THREE.Mesh | null = null
   private selectedDeviceId: string | null = null
+  private hoverRing: THREE.Mesh | null = null
+  private highlightedId: string | null = null
+  private multiRingGeo: THREE.RingGeometry | null = null
+  private multiRingMat: THREE.MeshBasicMaterial | null = null
+  private multiRings = new Map<string, THREE.Mesh>()
 
   constructor(scene: THREE.Scene) {
     this.scene = scene
@@ -81,6 +90,8 @@ export class DeviceRenderer {
 
     const el = document.createElement('div')
     el.className = 'device-status-badge'
+    el.title = STATUS_LABEL[status]
+    el.setAttribute('aria-label', STATUS_LABEL[status])
     el.style.cssText = `
       display:flex; align-items:center; gap:3px;
       background:rgba(15,23,42,.92); border:1px solid ${STATUS_COLOR_HEX[status]};
@@ -125,8 +136,10 @@ export class DeviceRenderer {
     byType.forEach((items, type) => {
       const geo = getDeviceGeometry(type)
       const mat = getMaterial(type).clone()
-      mat.vertexColors = false
+      mat.vertexColors = geo.hasAttribute('color')
       const mesh = new THREE.InstancedMesh(geo, mat, items.length + 50)
+      mesh.castShadow = true
+      mesh.receiveShadow = true
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       mesh.count = items.length
       mesh.userData.deviceType = type
@@ -182,6 +195,7 @@ export class DeviceRenderer {
       mesh.count = idx + 1
       mesh.instanceMatrix.needsUpdate = true
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+      mesh.computeBoundingSphere()
       mesh.userData[`device_${idx}`] = dev.id
       this.instanceIndex.set(dev.id, { type, idx })
       this.instanceColors.set(dev.id, color.clone())
@@ -207,8 +221,10 @@ export class DeviceRenderer {
 
       const geo  = getDeviceGeometry(type)
       const mat  = getMaterial(type).clone()
-      mat.vertexColors = false
+      mat.vertexColors = geo.hasAttribute('color')
       const newMesh = new THREE.InstancedMesh(geo, mat, existing.length + 50)
+      newMesh.castShadow = true
+      newMesh.receiveShadow = true
       newMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       newMesh.count = existing.length
       newMesh.userData.deviceType = type
@@ -243,11 +259,7 @@ export class DeviceRenderer {
     if (!mesh) return
     this.statusMap.set(deviceId, status)
     let color = STATUS_COLOR_THREE[status].clone()
-    if (this.dimmedIds.size > 0 && !this.dimmedIds.has(deviceId)) {
-      color = color.clone().multiplyScalar(0.18)
-    } else if (this.dimmedIds.size > 0 && this.dimmedIds.has(deviceId)) {
-      color = color.clone().multiplyScalar(2.0)
-    }
+    if (this.hasFilter && !this.dimmedIds.has(deviceId)) color.multiplyScalar(0.3)
     mesh.setColorAt(ref.idx, color)
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     this.instanceColors.set(deviceId, color)
@@ -265,27 +277,61 @@ export class DeviceRenderer {
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
   }
 
+  // Hover is shown as a ground ring rather than an instance-color tint, for
+  // the same reason selection is (see setSelectedDevice below): pulseStatus
+  // overwrites instance colors every frame for warning/critical devices, so a
+  // color-based hover tint gets fought over and flickers.
   setHighlight(deviceId: string, on: boolean) {
-    const ref   = this.instanceIndex.get(deviceId)
-    if (!ref) return
-    const mesh  = this.instancedMeshes.get(ref.type)
-    if (!mesh) return
-    const base  = this.instanceColors.get(deviceId) ?? new THREE.Color(0xffffff)
-    const color = on ? base.clone().multiplyScalar(2.4) : base.clone()
-    mesh.setColorAt(ref.idx, color)
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    this.highlightedId = on ? deviceId : (this.highlightedId === deviceId ? null : this.highlightedId)
+    if (!this.hoverRing) {
+      const geo = new THREE.RingGeometry(0.74, 0.78, 48)
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xf8fafc, transparent: true, opacity: 0.85,
+        side: THREE.DoubleSide, depthTest: false,
+      })
+      this.hoverRing = new THREE.Mesh(geo, mat)
+      this.hoverRing.rotation.x = -Math.PI / 2
+      this.hoverRing.renderOrder = 998
+      this.scene.add(this.hoverRing)
+    }
+    if (!this.highlightedId) {
+      this.hoverRing.visible = false
+      return
+    }
+    const pos = this.getDeviceWorldPos(this.highlightedId)
+    if (pos) this.hoverRing.position.set(pos.x, 0.025, pos.z)
+    this.hoverRing.visible = true
   }
 
+  // Same reasoning as the selection/hover rings above: a color-tint multi-
+  // select highlight gets overwritten every frame by pulseStatus for any
+  // warning/critical device in the set, so it's shown as rings instead.
   setMultiHighlight(deviceIds: string[]) {
     const selectedSet = new Set(deviceIds)
-    this.instancedMeshes.forEach(mesh => {
-      for (let i = 0; i < mesh.count; i++) {
-        const id = mesh.userData[`device_${i}`] as string
-        if (!id) continue
-        const base = this.instanceColors.get(id) ?? new THREE.Color(0xffffff)
-        mesh.setColorAt(i, selectedSet.has(id) ? base.clone().multiplyScalar(3.0) : base.clone())
+    if (!this.multiRingGeo) {
+      this.multiRingGeo = new THREE.RingGeometry(0.7, 0.74, 40)
+      this.multiRingMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8, transparent: true, opacity: 0.9,
+        side: THREE.DoubleSide, depthTest: false,
+      })
+    }
+    this.multiRings.forEach((ring, id) => {
+      if (selectedSet.has(id)) return
+      this.scene.remove(ring)
+      this.multiRings.delete(id)
+    })
+    selectedSet.forEach(id => {
+      const pos = this.getDeviceWorldPos(id)
+      if (!pos) return
+      let ring = this.multiRings.get(id)
+      if (!ring) {
+        ring = new THREE.Mesh(this.multiRingGeo!, this.multiRingMat!)
+        ring.rotation.x = -Math.PI / 2
+        ring.renderOrder = 997
+        this.multiRings.set(id, ring)
+        this.scene.add(ring)
       }
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+      ring.position.set(pos.x, 0.02, pos.z)
     })
   }
 
@@ -336,9 +382,16 @@ export class DeviceRenderer {
     mat4.setPosition(pos)
     mesh.setMatrixAt(ref.idx, mat4)
     mesh.instanceMatrix.needsUpdate = true
+    // InstancedMesh.raycast() rejects the whole mesh against a cached
+    // boundingSphere computed once (lazily) from wherever instances were
+    // when it was first touched — three.js never recomputes it as instances
+    // move, so a device dragged far from that original cluster becomes
+    // silently unpickable without this.
+    mesh.computeBoundingSphere()
   }
 
   applySearchFilter(matchingIds: Set<string>, hasFilter: boolean) {
+    this.hasFilter = hasFilter
     if (!hasFilter) {
       this.dimmedIds.clear()
       this.clearSearchLabels()
@@ -409,7 +462,7 @@ export class DeviceRenderer {
         const status = this.statusMap.get(deviceId)
         if (!status) continue
         const base = STATUS_COLOR_THREE[status].clone()
-        const isMatch = this.dimmedIds.size === 0 || this.dimmedIds.has(deviceId)
+        const isMatch = !this.hasFilter || this.dimmedIds.has(deviceId)
         const color = isMatch ? base.clone() : base.clone().multiplyScalar(0.3)
         mesh.setColorAt(i, color)
         this.instanceColors.set(deviceId, color)
@@ -429,7 +482,7 @@ export class DeviceRenderer {
       return
     }
     if (!this.selectionRing) {
-      const geo = new THREE.RingGeometry(0.85, 1.05, 32)
+      const geo = new THREE.RingGeometry(0.65, 0.69, 48)
       const mat = new THREE.MeshBasicMaterial({
         color: 0x60a5fa, transparent: true, opacity: 0.95,
         side: THREE.DoubleSide, depthTest: false,
@@ -445,15 +498,68 @@ export class DeviceRenderer {
 
   // Keeps the selection ring pinned under the selected device even while it's
   // being dragged; called once per frame from the render loop.
-  tick() {
+  tick(camera?: THREE.Camera) {
     if (this.selectedDeviceId && this.selectionRing?.visible) {
       const pos = this.getDeviceWorldPos(this.selectedDeviceId)
       if (pos) this.selectionRing.position.set(pos.x, 0.03, pos.z)
+    }
+    if (this.highlightedId && this.hoverRing?.visible) {
+      const pos = this.getDeviceWorldPos(this.highlightedId)
+      if (pos) this.hoverRing.position.set(pos.x, 0.025, pos.z)
+    }
+    if (this.multiRings.size) {
+      this.multiRings.forEach((ring, id) => {
+        const pos = this.getDeviceWorldPos(id)
+        if (pos) ring.position.set(pos.x, 0.02, pos.z)
+      })
     }
     this.statusBadges.forEach((badge, id) => {
       const pos = this.getDeviceWorldPos(id)
       if (pos) badge.position.copy(pos).add(new THREE.Vector3(0, 1.3, 0))
     })
+    this.searchLabels.forEach((label, id) => {
+      const pos = this.getDeviceWorldPos(id)
+      if (pos) label.position.copy(pos).add(new THREE.Vector3(0, 1.7, 0))
+    })
+    if (camera && performance.now() >= this.nextTypeLabelUpdate) {
+      this.nextTypeLabelUpdate = performance.now() + 150
+      const nearby: { id: string; distance: number; pos: THREE.Vector3 }[] = []
+      this.instanceIndex.forEach((_, id) => {
+        if (this.hasFilter && !this.dimmedIds.has(id)) return
+        const pos = this.getDeviceWorldPos(id)!
+        const distance = pos.distanceTo(camera.position)
+        const projected = pos.clone().project(camera)
+        if (distance < 16 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1 && Math.abs(projected.z) < 1) nearby.push({ id, distance, pos })
+      })
+      nearby.sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id))
+      const kept = new Set<string>()
+      for (const { id, pos } of nearby.slice(0, 16)) {
+        kept.add(id)
+        let label = this.typeLabels.get(id)
+        if (!label) {
+          const type = this.instanceIndex.get(id)!.type
+          const el = document.createElement('div')
+          el.className = 'device-type-label'
+          el.textContent = getTypeAbbr(type)
+          el.title = getTypeLabel(type)
+          el.style.cssText = 'padding:2px 5px;border-radius:4px;background:#0f172aee;border:1px solid #526780;color:#e2e8f0;font:600 10px monospace;pointer-events:none;white-space:nowrap;'
+          label = new CSS2DObject(el)
+          this.typeLabels.set(id, label)
+          this.scene.add(label)
+        }
+        label.position.copy(pos).add(new THREE.Vector3(0, 0.45, 0))
+      }
+      this.typeLabels.forEach((label, id) => {
+        if (kept.has(id)) return
+        this.scene.remove(label)
+        label.element.remove()
+        this.typeLabels.delete(id)
+      })
+    }
+  }
+
+  getLabelObstacles(): CSS2DObject[] {
+    return [...this.statusBadges.values(), ...this.searchLabels.values(), ...this.typeLabels.values()]
   }
 
   getDeviceWorldPos(deviceId: string): THREE.Vector3 | null {
@@ -469,6 +575,8 @@ export class DeviceRenderer {
   }
 
   dispose() {
+    this.typeLabels.forEach(label => { this.scene.remove(label); label.element.remove() })
+    this.typeLabels.clear()
     this.clearSearchLabels()
     this.statusBadges.forEach((badge) => {
       this.scene.remove(badge)
@@ -482,7 +590,20 @@ export class DeviceRenderer {
       ;(this.selectionRing.material as THREE.Material).dispose()
       this.selectionRing = null
     }
+    if (this.hoverRing) {
+      this.scene.remove(this.hoverRing)
+      this.hoverRing.geometry.dispose()
+      ;(this.hoverRing.material as THREE.Material).dispose()
+      this.hoverRing = null
+    }
+    this.multiRings.forEach(ring => this.scene.remove(ring))
+    this.multiRings.clear()
+    this.multiRingGeo?.dispose()
+    this.multiRingMat?.dispose()
+    this.multiRingGeo = null
+    this.multiRingMat = null
     this.selectedDeviceId = null
+    this.highlightedId = null
     this.instancedMeshes.forEach(mesh => {
       // Don't dispose mesh.geometry here — it's shared with the module-level
       // geometry cache. disposeGeometryCache() handles cleanup and clears the

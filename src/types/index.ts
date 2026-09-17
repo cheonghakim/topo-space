@@ -21,6 +21,10 @@ export type EdgeType =
 
 export type EditorMode = 'view' | 'edit'
 
+// Host-owned transport health (REST poll / WebSocket / etc). Not derived
+// automatically — the host calls `editor.setConnectionStatus(...)` itself.
+export type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected'
+
 export type EditorAction =
   | 'view'
   | 'layout:update'

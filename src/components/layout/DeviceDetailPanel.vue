@@ -9,7 +9,7 @@
           <div class="dev-name">{{ mapping?.displayName ?? device.hostname }}</div>
           <div class="dev-ip">{{ device.ip }}</div>
         </div>
-        <span class="status-badge" :class="device.status">{{ STATUS_LABEL[device.status ?? 'unknown'] }}</span>
+        <span class="status-badge" :style="{ color: STATUS_COLOR_HEX[device.status ?? 'unknown'], background: '#17263b' }">{{ STATUS_ICON[device.status ?? 'unknown'] }} {{ STATUS_LABEL[device.status ?? 'unknown'] }}</span>
         <span v-if="mapping?.operatorState?.acknowledged" class="ack-badge" title="Acknowledged — original status is preserved above">✓ Ack</span>
         <button class="close-btn" @click="ui.select(null)" title="Close">✕</button>
       </div>
@@ -122,7 +122,7 @@
 import { computed, ref, watch } from 'vue'
 import { useEditorStore }  from '@/stores/editor'
 import { useUIStore }      from '@/stores/ui'
-import { STATUS_LABEL } from '@/utils/colorUtils'
+import { STATUS_LABEL, STATUS_ICON, STATUS_COLOR_HEX } from '@/utils/colorUtils'
 import { useDeviceTypeHelpers } from '@/composables/useDeviceTypeHelpers'
 import { useNmsEditor } from '@/composables/useNmsEditor'
 

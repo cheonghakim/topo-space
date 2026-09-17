@@ -17,6 +17,7 @@ import { OverviewRenderer } from '@/renderers/OverviewRenderer'
 import type { OverviewCard } from '@/renderers/OverviewRenderer'
 import { useEditorStore } from '@/stores/editor'
 import type { SpaceType } from '@/types'
+import { STATUS_COLOR_HEX } from '@/utils/colorUtils'
 
 const emit = defineEmits<{ (e: 'enter-floor', id: string): void }>()
 
@@ -105,6 +106,7 @@ onMounted(() => {
 })
 
 watch(cards, () => draw(), { deep: true })
+watch(STATUS_COLOR_HEX, () => draw())
 
 onBeforeUnmount(() => {
   ro?.disconnect()

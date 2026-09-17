@@ -33,8 +33,7 @@
     </div>
 
     <div class="spacer" />
-    <span v-if="liveStatus" class="status-pill on">Live</span>
-    <span v-else class="status-pill off">Offline</span>
+    <span class="status-pill" :class="connectionStatusClass">{{ connectionStatusLabel }}</span>
   </div>
 </template>
 
@@ -67,7 +66,18 @@ interface Menu {
 }
 
 const openMenu = ref<string | null>(null);
-const liveStatus = computed(() => ui.wsConnected);
+const connectionStatusClass = computed(() => ({
+  on: ui.connectionStatus === "connected",
+  reconnecting: ui.connectionStatus === "reconnecting",
+  off: ui.connectionStatus === "disconnected",
+}));
+const connectionStatusLabel = computed(() => {
+  switch (ui.connectionStatus) {
+    case "connected": return "Live";
+    case "reconnecting": return "Reconnecting…";
+    default: return "Offline";
+  }
+});
 
 const PANELS: { label: string; key: keyof typeof ui }[] = [
   { label: "Alerts", key: "showAlertPanel" },
@@ -98,10 +108,10 @@ function toggleLayer(t: EdgeType) {
 function toggleWs() {
   if (ws.connected.value) {
     ws.disconnect();
-    ui.wsConnected = false;
+    ui.setConnectionStatus("disconnected");
   } else {
     ws.connect();
-    ui.wsConnected = true;
+    ui.setConnectionStatus("connected");
   }
 }
 
@@ -149,7 +159,7 @@ const menus = computed<Menu[]>(() => [
       { separator: true },
       {
         label: "Live updates",
-        checked: () => ui.wsConnected,
+        checked: () => ui.connectionStatus === "connected",
         action: toggleWs,
       },
       // Injects fake random alarms — opt-in via features.chaosSimulator so a
@@ -422,6 +432,11 @@ onBeforeUnmount(() => document.removeEventListener("mousedown", onDocClick));
   color: #4ade80;
   border-color: #166534;
   background: rgba(34, 197, 94, 0.1);
+}
+.status-pill.reconnecting {
+  color: #fbbf24;
+  border-color: #92400e;
+  background: rgba(245, 158, 11, 0.1);
 }
 .status-pill.off {
   color: #6b7280;

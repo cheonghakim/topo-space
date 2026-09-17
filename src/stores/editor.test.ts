@@ -109,3 +109,135 @@ describe('editor store security boundaries', () => {
     expect(mapping?.operatorState?.assignedTo).toBeUndefined()
   })
 })
+
+describe('backend push actions', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  // These actions represent a host's own backend pushing data it already
+  // owns/trusts — a different trust boundary than a UI user editing the
+  // topology by hand, so a locked-down permissionResolver must not block them.
+  function lockDown(editor: ReturnType<typeof useEditorStore>) {
+    editor.configureSecurity({ mode: 'view', permissionResolver: () => false })
+  }
+
+  it('upsertLinks/removeLinks bypass the permission guard and merge in place', () => {
+    const editor = useEditorStore()
+    lockDown(editor)
+
+    editor.upsertLinks([
+      { id: 'link-1', sourceDeviceId: 'a', targetDeviceId: 'b', type: 'physical', source: 'discovered', status: 'up' },
+    ])
+    expect(editor.links.get('link-1')?.status).toBe('up')
+
+    editor.upsertLinks([
+      { id: 'link-1', sourceDeviceId: 'a', targetDeviceId: 'b', type: 'physical', source: 'discovered', status: 'down' },
+    ])
+    expect(editor.links.size).toBe(1)
+    expect(editor.links.get('link-1')?.status).toBe('down')
+
+    editor.removeLinks(['link-1'])
+    expect(editor.links.has('link-1')).toBe(false)
+  })
+
+  it('upsertSpaces bypasses the guard; removeSpaces soft-deletes (archives) instead of removing', () => {
+    const editor = useEditorStore()
+    lockDown(editor)
+
+    editor.upsertSpaces([{ id: 'space-1', name: 'Site A', kind: 'physical', type: 'site', source: 'api' }])
+    expect(editor.spaces.get('space-1')?.archived).toBeFalsy()
+
+    editor.removeSpaces(['space-1'])
+    expect(editor.spaces.has('space-1')).toBe(true)
+    expect(editor.spaces.get('space-1')?.archived).toBe(true)
+  })
+
+  it('upsertInterfaces bypasses the guard and merges by id', () => {
+    const editor = useEditorStore()
+    lockDown(editor)
+
+    editor.upsertInterfaces([{ id: 'if-1', rawDeviceId: 'dev-1', name: 'eth0', status: 'up' }])
+    expect(editor.interfaces.get('if-1')?.status).toBe('up')
+
+    editor.upsertInterfaces([{ id: 'if-1', rawDeviceId: 'dev-1', name: 'eth0', status: 'down' }])
+    expect(editor.interfaces.size).toBe(1)
+    expect(editor.interfaces.get('if-1')?.status).toBe('down')
+  })
+
+  it('upsertVirtualNodes/removeVirtualNodes bypass the permission guard', () => {
+    const editor = useEditorStore()
+    lockDown(editor)
+
+    editor.upsertVirtualNodes([{ id: 'vn-1', label: 'Internet', type: 'internet' }])
+    expect(editor.virtualNodes.has('vn-1')).toBe(true)
+
+    editor.removeVirtualNodes(['vn-1'])
+    expect(editor.virtualNodes.has('vn-1')).toBe(false)
+  })
+
+  it('setOperatorState partially merges without clobbering unrelated fields, and bypasses the guard', () => {
+    const editor = useEditorStore()
+    editor.replaceData({
+      devices: [{ id: 'dev-1', source: 'cmdb', externalId: 'dev-1', hostname: 'core-1' }],
+      deviceMappings: [{ id: 'map-1', rawDeviceId: 'dev-1', mappingStatus: 'mapped' }],
+    })
+    lockDown(editor)
+
+    editor.setOperatorState('dev-1', { assignedTo: 'bob' })
+    editor.setOperatorState('dev-1', { maintenanceMode: true, maintenanceUntil: '2026-01-01' })
+
+    const state = editor.getMappingByDeviceId('dev-1')?.operatorState
+    expect(state?.assignedTo).toBe('bob')
+    expect(state?.maintenanceMode).toBe(true)
+    expect(state?.maintenanceUntil).toBe('2026-01-01')
+
+    editor.setOperatorState('dev-1', { suppressed: true })
+    const state2 = editor.getMappingByDeviceId('dev-1')?.operatorState
+    expect(state2?.assignedTo).toBe('bob')
+    expect(state2?.suppressed).toBe(true)
+  })
+
+  it('removeDevices deletes the device, its mapping, and any link referencing it — but leaves unrelated links alone', () => {
+    const editor = useEditorStore()
+    editor.replaceData({
+      devices: [
+        { id: 'dev-1', source: 'cmdb', externalId: 'dev-1', hostname: 'a' },
+        { id: 'dev-2', source: 'cmdb', externalId: 'dev-2', hostname: 'b' },
+        { id: 'dev-3', source: 'cmdb', externalId: 'dev-3', hostname: 'c' },
+      ],
+      deviceMappings: [
+        { id: 'map-1', rawDeviceId: 'dev-1', mappingStatus: 'mapped' },
+      ],
+      links: [
+        { id: 'link-1', sourceDeviceId: 'dev-1', targetDeviceId: 'dev-2', type: 'physical', source: 'discovered' },
+        { id: 'link-2', sourceDeviceId: 'dev-3', targetDeviceId: 'dev-2', type: 'physical', source: 'discovered' },
+        { id: 'link-3', sourceDeviceId: 'dev-2', targetDeviceId: 'dev-1', type: 'physical', source: 'discovered' },
+      ],
+    })
+    lockDown(editor)
+
+    editor.removeDevices(['dev-1'])
+
+    expect(editor.devices.has('dev-1')).toBe(false)
+    expect(editor.getMappingByDeviceId('dev-1')).toBeUndefined()
+    expect(editor.links.has('link-1')).toBe(false)
+    expect(editor.links.has('link-3')).toBe(false)
+    expect(editor.links.has('link-2')).toBe(true)
+  })
+
+  it('emitChange tags user-driven actions as "user" and backend-push actions as "api"', () => {
+    const editor = useEditorStore()
+    const events: string[] = []
+    editor.configureSecurity({
+      mode: 'edit',
+      permissionResolver: () => true,
+      onChange: (e) => events.push(e.source),
+    })
+
+    editor.addSpace({ id: 'space-1', name: 'Site', kind: 'physical', type: 'site', source: 'manual' })
+    editor.upsertLinks([{ id: 'link-1', sourceDeviceId: 'a', targetDeviceId: 'b', type: 'physical', source: 'discovered' }])
+
+    expect(events).toEqual(['user', 'api'])
+  })
+})

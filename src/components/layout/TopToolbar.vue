@@ -55,13 +55,13 @@
       <input type="checkbox" v-model="ui.alertsOnly" /> 🔔 Alerts only
     </label>
 
-    <div class="chip critical" :title="scopeLabel">
+    <div class="chip critical" :title="scopeLabel" :style="{ color: STATUS_COLOR_HEX.critical, borderColor: STATUS_COLOR_HEX.critical }">
       Critical <b>{{ floorCritical }}</b
       ><span v-if="showTotals" class="chip-total">
         ({{ editor.criticalCount }} total)</span
       >
     </div>
-    <div class="chip warning" :title="scopeLabel">
+    <div class="chip warning" :title="scopeLabel" :style="{ color: STATUS_COLOR_HEX.warning, borderColor: STATUS_COLOR_HEX.warning }">
       Warning <b>{{ floorWarning }}</b
       ><span v-if="showTotals" class="chip-total">
         ({{ editor.warningCount }} total)</span
@@ -124,7 +124,7 @@ import { computed, ref, onMounted, onBeforeUnmount } from "vue";
 import { useEditorStore } from "@/stores/editor";
 import { useUIStore } from "@/stores/ui";
 import { useNmsEditor } from "@/composables/useNmsEditor";
-import { DEVICE_TYPE_LABEL } from "@/utils/colorUtils";
+import { DEVICE_TYPE_LABEL, STATUS_COLOR_HEX } from "@/utils/colorUtils";
 import type { DeviceStatus, DeviceType } from "@/types";
 
 const editor = useEditorStore();

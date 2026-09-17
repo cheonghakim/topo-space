@@ -5,22 +5,11 @@ import './style.css'
 import { configureNmsEditor, NMS_EDITOR_OPTIONS_KEY } from '@/composables/useNmsEditor'
 import { useEditorStore } from '@/stores/editor'
 import { useUIStore } from '@/stores/ui'
-import type { EditorMode, EditorOptions, FilterState, RawDevice } from '@/types'
+import type { EditorOptions } from '@/types'
+import type { NmsEditor } from './public-api'
 
 export type * from '@/types'
-
-export interface NmsEditor {
-  destroy: () => void
-  upsertDevices: (devices: RawDevice[]) => void
-  removeDevices: (ids: string[]) => void
-  selectDevice: (id: string | null) => void
-  applyFilter: (filter: Partial<FilterState>) => void
-  setMode: (mode: EditorMode) => void
-  save: () => Promise<void>
-  exportSnapshot: ReturnType<typeof useEditorStore>['exportSnapshot']
-  importSnapshot: ReturnType<typeof useEditorStore>['importSnapshot']
-  getDevice: ReturnType<typeof useEditorStore>['getDevice']
-}
+export type { NmsEditor } from './public-api'
 
 export function createNmsEditor(options: EditorOptions): NmsEditor {
   if (!options.container) {
@@ -54,10 +43,37 @@ export function createNmsEditor(options: EditorOptions): NmsEditor {
       editor.upsertDevices(devices)
     },
     removeDevices(ids) {
-      ids.forEach((id) => {
-        editor.devices.delete(id)
-        editor.unmappedDevices.splice(0, editor.unmappedDevices.length, ...editor.unmappedDevices.filter(d => d.id !== id))
-      })
+      editor.removeDevices(ids)
+    },
+    upsertLinks(links) {
+      editor.upsertLinks(links)
+    },
+    removeLinks(ids) {
+      editor.removeLinks(ids)
+    },
+    upsertSpaces(spaces) {
+      editor.upsertSpaces(spaces)
+    },
+    removeSpaces(ids) {
+      editor.removeSpaces(ids)
+    },
+    upsertInterfaces(interfaces) {
+      editor.upsertInterfaces(interfaces)
+    },
+    upsertVirtualNodes(nodes) {
+      editor.upsertVirtualNodes(nodes)
+    },
+    removeVirtualNodes(ids) {
+      editor.removeVirtualNodes(ids)
+    },
+    setOperatorState(deviceId, patch) {
+      editor.setOperatorState(deviceId, patch)
+    },
+    setConnectionStatus(status, detail) {
+      ui.setConnectionStatus(status, detail)
+    },
+    notify(message, type) {
+      ui.addToast(message, type)
     },
     selectDevice(id) {
       ui.select(id ? { type: 'device', id } : null)

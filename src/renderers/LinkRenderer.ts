@@ -30,6 +30,7 @@ export class LinkRenderer {
   private previewLine: Line2 | null = null
   private _elapsed = 0
   private _resolution = new THREE.Vector2(1, 1)
+  private highlightedId: string | null = null
 
   constructor(scene: THREE.Scene) { this.scene = scene }
 
@@ -166,6 +167,7 @@ export class LinkRenderer {
   }
 
   setHighlight(id: string | null, prev: string | null) {
+    this.highlightedId = id
     if (prev) {
       const o = this.objects.get(prev)
       if (o) (o.line.material as LineMaterial).opacity = LINK_STYLE[o.link.type]?.opacity ?? 0.6
@@ -221,7 +223,13 @@ export class LinkRenderer {
     this.objects.forEach(({ line, link }) => {
       const mat = line.material as LineMaterial
       if (link.status === 'down') {
-        mat.opacity = 0.25 + 0.35 * Math.abs(Math.sin(this._elapsed * 2.5))
+        // Held at full opacity while hovered — otherwise this pulse fights
+        // setHighlight's one-shot opacity write every frame and the
+        // highlight flickers, the same conflict pulseStatus had with device
+        // hover before it was moved to a ring (see DeviceRenderer.setHighlight).
+        mat.opacity = link.id === this.highlightedId
+          ? 1.0
+          : 0.25 + 0.35 * Math.abs(Math.sin(this._elapsed * 2.5))
       } else if (mat.dashed) {
         // Marching-ants flow — only dashed link types (logical/service_dependency/
         // manual/inferred) animate; solid types read "flow" via the particle stream.
@@ -281,6 +289,7 @@ export class LinkRenderer {
       ;(handle.material as THREE.Material).dispose()
     })
     this.objects.clear()
+    this.highlightedId = null
     if (this.previewLine) {
       this.scene.remove(this.previewLine)
       this.previewLine.geometry.dispose()

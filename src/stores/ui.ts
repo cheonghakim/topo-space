@@ -9,6 +9,7 @@ import type {
   DeviceStatus,
   DeviceType,
   Toast,
+  ConnectionStatus,
 } from "@/types";
 import { DEFAULT_FILTER } from "@/types";
 
@@ -97,7 +98,9 @@ export const useUIStore = defineStore("ui", () => {
   const timelineFrameIdx = ref(-1); // -1 = live
   const timelineRecording = ref(false);
 
-  const wsConnected = ref(false);
+  // Host-owned transport health (REST poll / WebSocket / etc), set via
+  // `editor.setConnectionStatus(...)` — never inferred automatically.
+  const connectionStatus = ref<ConnectionStatus>("disconnected");
 
   const blastSourceId = ref<string | null>(null);
 
@@ -124,6 +127,11 @@ export const useUIStore = defineStore("ui", () => {
   function removeToast(id: string) {
     const idx = toasts.value.findIndex((t) => t.id === id);
     if (idx >= 0) toasts.value.splice(idx, 1);
+  }
+
+  function setConnectionStatus(status: ConnectionStatus, detail?: { message?: string }) {
+    connectionStatus.value = status;
+    if (detail?.message) addToast(detail.message, status === "disconnected" ? "warning" : "info");
   }
 
   // ── Tooltip ───────────────────────────────────────────────────────────────
@@ -286,7 +294,8 @@ export const useUIStore = defineStore("ui", () => {
     setColorblindMode,
     timelineFrameIdx,
     timelineRecording,
-    wsConnected,
+    connectionStatus,
+    setConnectionStatus,
     blastSourceId,
     offscreenAlerts,
     tooltip,

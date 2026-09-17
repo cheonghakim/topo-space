@@ -167,7 +167,8 @@ The object returned by `createNmsEditor` gives you programmatic control over the
 // Devices already in the scene are updated in place; new ones are added to the unmapped list.
 editor.upsertDevices(devices: RawDevice[])
 
-// Remove devices by id. This also removes any links attached to them.
+// Remove devices by id. This also removes any links attached to them
+// and their device mapping.
 editor.removeDevices(ids: string[])
 
 // Programmatically select a device (opens its detail panel).
@@ -199,6 +200,86 @@ await editor.save()
 // Tear down the Vue app and release all Three.js resources.
 editor.destroy()
 ```
+
+### Backend push methods
+
+These never go through the UI permission guard — they're for a backend you already trust pushing facts it discovered, not a user editing the topology by hand — and they fire `onChange` with `event.source === 'api'` so you can tell backend-driven changes apart from user-driven ones.
+
+```ts
+// Batch upsert/remove links (merges by id, same semantics as upsertDevices).
+editor.upsertLinks(links: NetworkLink[])
+editor.removeLinks(ids: string[])
+
+// Batch upsert spaces. removeSpaces is a soft delete — it archives the
+// space (archived: true) rather than deleting it, so nothing underneath
+// it is left pointing at a parentId that no longer exists.
+editor.upsertSpaces(spaces: Space[])
+editor.removeSpaces(ids: string[])
+
+// Batch upsert interfaces (link speed/traffic/errors, etc).
+editor.upsertInterfaces(interfaces: NetworkInterface[])
+
+// Batch upsert/remove virtual nodes (internet/cloud/external placeholders).
+editor.upsertVirtualNodes(nodes: VirtualNode[])
+editor.removeVirtualNodes(ids: string[])
+
+// Partially merge a device's ack/maintenance/suppression state — only the
+// fields you pass are changed, everything else on operatorState is kept.
+editor.setOperatorState(deviceId: string, patch: Partial<OperatorState>)
+
+// Report your own transport's health. Drives the connection indicator in
+// the menu bar; topospace never infers this on its own.
+editor.setConnectionStatus(status: 'connected' | 'reconnecting' | 'disconnected', detail?: { message?: string })
+
+// Surface a toast, e.g. for a backend-detected alarm.
+editor.notify(message: string, type?: 'info' | 'warning' | 'critical' | 'success')
+```
+
+---
+
+## Backend Integration
+
+topospace has no collector, alerting engine, database, or auth server of its own — it's a view/editor layer. You own the polling/WebSocket/whatever transport and your own auth; you just call the methods above whenever your backend has new data. Two common patterns:
+
+**REST polling**
+
+```ts
+async function poll() {
+  try {
+    const res = await fetch('/api/topology', { headers: { Authorization: `Bearer ${token}` } })
+    const { devices, links } = await res.json()
+    editor.upsertDevices(devices)
+    editor.upsertLinks(links)
+    editor.setConnectionStatus('connected')
+  } catch (err) {
+    editor.setConnectionStatus('disconnected', { message: 'Failed to reach backend' })
+  }
+}
+setInterval(poll, 10_000)
+poll()
+```
+
+**WebSocket push**
+
+```ts
+const ws = new WebSocket('wss://your-backend/topology')
+
+ws.onopen = () => editor.setConnectionStatus('connected')
+ws.onclose = () => editor.setConnectionStatus('reconnecting')
+ws.onerror = () => editor.setConnectionStatus('reconnecting')
+
+ws.onmessage = (msg) => {
+  const event = JSON.parse(msg.data)
+  switch (event.type) {
+    case 'device.upsert':   editor.upsertDevices(event.devices); break
+    case 'link.upsert':     editor.upsertLinks(event.links); break
+    case 'device.ack':      editor.setOperatorState(event.deviceId, { acknowledged: true }); break
+    case 'alarm':           editor.notify(event.message, event.severity); break
+  }
+}
+```
+
+Your backend decides the message shape (`event.type` above is just an example) — topospace doesn't mandate a wire format, only the methods you call once you've parsed it.
 
 ---
 
@@ -526,7 +607,7 @@ permissionResolver: ({ action, target, userContext }) => {
 // 씬에 있는 장비는 제자리에서 업데이트, 새 장비는 unmapped 목록에 추가
 editor.upsertDevices(devices: RawDevice[])
 
-// id로 장비 삭제. 연결된 링크도 같이 삭제됨
+// id로 장비 삭제. 연결된 링크와 device mapping도 같이 삭제됨
 editor.removeDevices(ids: string[])
 
 // 특정 장비 선택 (디테일 패널 열림). null 넘기면 선택 해제
@@ -557,6 +638,86 @@ await editor.save()
 // Vue 앱 언마운트 + Three.js 리소스 해제
 editor.destroy()
 ```
+
+### 백엔드 push 메서드
+
+이 메서드들은 UI 권한 가드를 거치지 않아요 — 이미 신뢰하는 백엔드가 자기가 발견한 사실을 밀어넣는 것이지, 사용자가 UI에서 편집하는 게 아니기 때문이에요. 대신 `onChange`가 `event.source === 'api'`로 호출돼서 백엔드발 변경과 사용자발 변경을 구분할 수 있어요.
+
+```ts
+// 링크 배치 upsert/삭제 (id 기준 병합, upsertDevices와 동일한 방식)
+editor.upsertLinks(links: NetworkLink[])
+editor.removeLinks(ids: string[])
+
+// 공간(space) 배치 upsert. removeSpaces는 소프트 삭제 — 실제로 지우지
+// 않고 archived: true만 세팅해서, 그 밑에 매핑된 것들이 존재하지 않는
+// parentId를 가리키는 일이 없게 함
+editor.upsertSpaces(spaces: Space[])
+editor.removeSpaces(ids: string[])
+
+// 인터페이스(속도/트래픽/에러 등) 배치 upsert
+editor.upsertInterfaces(interfaces: NetworkInterface[])
+
+// 가상 노드(internet/cloud/external 표시용) 배치 upsert/삭제
+editor.upsertVirtualNodes(nodes: VirtualNode[])
+editor.removeVirtualNodes(ids: string[])
+
+// 장비의 ack/maintenance/suppression 상태를 부분 병합 — 넘긴 필드만
+// 바뀌고 operatorState의 나머지 필드는 그대로 유지됨
+editor.setOperatorState(deviceId: string, patch: Partial<OperatorState>)
+
+// 자기 transport의 연결 상태를 알림. 메뉴바의 연결 인디케이터에
+// 반영됨 — topospace가 자동으로 추론하지 않음
+editor.setConnectionStatus(status: 'connected' | 'reconnecting' | 'disconnected', detail?: { message?: string })
+
+// 토스트 알림 표시 (예: 백엔드가 감지한 알람)
+editor.notify(message: string, type?: 'info' | 'warning' | 'critical' | 'success')
+```
+
+---
+
+## 백엔드 연동
+
+topospace는 자체 수집기, 알림 엔진, DB, 인증 서버가 없어요 — 뷰/에디터 레이어일 뿐이에요. 폴링/웹소켓 등 transport와 인증은 직접 구현하고, 백엔드에 새 데이터가 생길 때마다 위 메서드들을 호출하면 됩니다. 흔한 패턴 두 가지:
+
+**REST 폴링**
+
+```ts
+async function poll() {
+  try {
+    const res = await fetch('/api/topology', { headers: { Authorization: `Bearer ${token}` } })
+    const { devices, links } = await res.json()
+    editor.upsertDevices(devices)
+    editor.upsertLinks(links)
+    editor.setConnectionStatus('connected')
+  } catch (err) {
+    editor.setConnectionStatus('disconnected', { message: '백엔드 연결 실패' })
+  }
+}
+setInterval(poll, 10_000)
+poll()
+```
+
+**WebSocket push**
+
+```ts
+const ws = new WebSocket('wss://your-backend/topology')
+
+ws.onopen = () => editor.setConnectionStatus('connected')
+ws.onclose = () => editor.setConnectionStatus('reconnecting')
+ws.onerror = () => editor.setConnectionStatus('reconnecting')
+
+ws.onmessage = (msg) => {
+  const event = JSON.parse(msg.data)
+  switch (event.type) {
+    case 'device.upsert':   editor.upsertDevices(event.devices); break
+    case 'link.upsert':     editor.upsertLinks(event.links); break
+    case 'device.ack':      editor.setOperatorState(event.deviceId, { acknowledged: true }); break
+    case 'alarm':           editor.notify(event.message, event.severity); break
+  }
+}
+```
+
+메시지 형식(`event.type`)은 예시일 뿐이고 백엔드가 원하는 대로 정하면 돼요 — topospace는 wire format을 강제하지 않고, 파싱한 다음 호출할 메서드만 정해져 있어요.
 
 ---
 

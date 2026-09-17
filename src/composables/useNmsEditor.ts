@@ -96,6 +96,8 @@ function createNmsEditorRuntime(
   let _gizmoStartDrag: THREE.Vector3 | null = null;
   let _gizmoStartPos: THREE.Vector3 | null = null;
   let _spaceChildren: { id: string; offset: THREE.Vector3 }[] = [];
+  let _hoverMissStreak = 0;
+  let _pointerOverCanvas = false;
   const _prevStatus = new Map<string, string>();
   const _watchStops: WatchStopHandle[] = [];
   let options = initialOptions;
@@ -297,8 +299,14 @@ function createNmsEditorRuntime(
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointerleave", onPointerLeaveCanvas);
     canvas.addEventListener("contextmenu", onContextMenu);
     window.addEventListener("keydown", onKeyDown);
+  }
+
+  function onPointerLeaveCanvas() {
+    raycast.clearPointer();
+    _pointerOverCanvas = false;
   }
 
   function _bindWatchers() {
@@ -707,8 +715,8 @@ function createNmsEditorRuntime(
       vnode.update(elapsed);
       flash.update(delta);
       gizmo.update(scene.camera);
-      space.updateLod(scene.camera, scene.controls.target);
-      device.tick();
+      device.tick(scene.camera);
+      space.updateLod(scene.camera, scene.controls.target, scene.getSize(), device.getLabelObstacles(), scene.getLabelExclusions());
       if (ui.showParticles) particle.update(delta, ui.visibleLinkTypes);
       _updateOffscreenAlerts(elapsed);
 
@@ -730,10 +738,22 @@ function createNmsEditorRuntime(
         });
       }
 
-      if (!_gizmoAxis && !linkDrag.isDrawing && !dragMove.hasPending) {
+      if (_pointerOverCanvas && !_gizmoAxis && !linkDrag.isDrawing && !dragMove.hasPending) {
         const hit = raycast.castHover(32);
         const newHov = hit.deviceId ?? hit.linkId ?? hit.linkHandleId ?? null;
-        if (newHov !== ui.hoveredId) ui.hoveredId = newHov;
+        if (newHov) {
+          _hoverMissStreak = 0;
+          if (newHov !== ui.hoveredId) ui.hoveredId = newHov;
+        } else if (ui.hoveredId) {
+          // A single frame with no hit under the pointer is usually raycast
+          // noise at the edge of the hit-tested geometry (antialiasing,
+          // instanced-mesh bounds, a throttled poll landing mid-move) rather
+          // than the pointer actually leaving the device — clearing on every
+          // miss made the hover ring blink on and off while sitting still
+          // near an edge. Require a short run of misses before clearing.
+          _hoverMissStreak += 1;
+          if (_hoverMissStreak >= 3) ui.hoveredId = null;
+        }
       }
     });
   }
@@ -894,6 +914,7 @@ function createNmsEditorRuntime(
     if (!_canvas) return;
     _startPointer = { x: e.clientX, y: e.clientY };
     raycast.updatePointer(e, _canvas);
+    _pointerOverCanvas = true;
     _isDragCandidate = false;
 
     if (ui.mode === "edit" && gizmo.isVisible) {
@@ -959,6 +980,7 @@ function createNmsEditorRuntime(
   function onPointerMove(e: PointerEvent) {
     if (!_canvas) return;
     raycast.updatePointer(e, _canvas);
+    _pointerOverCanvas = true;
 
     if (ui.mode === "edit" && _gizmoAxis && _gizmoStartDrag && _gizmoStartPos) {
       const cur =
@@ -1499,6 +1521,14 @@ function createNmsEditorRuntime(
     camera.flyToOverview();
   }
 
+  function zoomCamera(factor: number) {
+    camera.zoom(factor);
+  }
+
+  function setCameraView(view: 'top' | 'perspective') {
+    camera.setView(view);
+  }
+
   // Pans to a point picked on the 2D minimap while preserving the current
   // camera-to-target offset (angle/zoom), rather than jumping to a fixed
   // device-framing distance — mirrors how map-click navigation behaves in
@@ -1514,7 +1544,7 @@ function createNmsEditorRuntime(
   function toggleColorblindMode() {
     ui.setColorblindMode(!ui.colorblindMode);
     applyColorMode(ui.colorblindMode ? "colorblind" : "default");
-    device.recolorAll();
+    device?.recolorAll();
   }
 
   // Cycles selection through active critical/warning devices on the current
@@ -1675,6 +1705,7 @@ function createNmsEditorRuntime(
     _canvas?.removeEventListener("pointerdown", onPointerDown);
     _canvas?.removeEventListener("pointermove", onPointerMove);
     _canvas?.removeEventListener("pointerup", onPointerUp);
+    _canvas?.removeEventListener("pointerleave", onPointerLeaveCanvas);
     _canvas?.removeEventListener("contextmenu", onContextMenu);
     window.removeEventListener("keydown", onKeyDown);
     gizmo?.dispose();
@@ -1685,6 +1716,7 @@ function createNmsEditorRuntime(
     blast?.dispose();
     vnode?.dispose();
     flash?.dispose();
+    camera.dispose();
     scene.dispose();
     _canvas = null;
     _prevStatus.clear();
@@ -1706,6 +1738,8 @@ function createNmsEditorRuntime(
     focusSpace,
     focusVirtualNode,
     resetCamera,
+    zoomCamera,
+    setCameraView,
     flyToWorldPoint,
     setDeviceAcknowledged,
     toggleColorblindMode,

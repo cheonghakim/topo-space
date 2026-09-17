@@ -39,6 +39,14 @@ export class RaycastManager {
 
   get currentPointer(): THREE.Vector2 { return this.pointer.clone() }
 
+  // Pointermove only fires while the cursor is over the canvas, so once it
+  // leaves, castHover() would otherwise keep re-raycasting the last position
+  // forever — re-asserting a stale device hover every frame and fighting any
+  // hover set from outside the canvas (e.g. RackServerListPanel's row hover).
+  clearPointer() {
+    this.pointer.set(-9999, -9999)
+  }
+
   castHover(throttleMs = 30): RaycastResult {
     const now = performance.now()
     if (now - this.lastTime < throttleMs) return {}
