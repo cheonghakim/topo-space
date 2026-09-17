@@ -388,6 +388,31 @@ function createNmsEditorRuntime(
     );
 
     _watchStops.push(
+      // autoLayout() only touches the store (editor.mapDevice) — it has no
+      // renderer access by design. This is the bridge: sync just the devices
+      // that actually moved instead of a full scene reload.
+      watch(
+        () => editor.lastAutoLayoutDeviceIds,
+        (ids) => {
+          if (!ids.length) return;
+          ids.forEach((id) => {
+            const mapping = editor.getMappingByDeviceId(id);
+            if (!mapping?.position) return;
+            const pos = new THREE.Vector3(mapping.position.x, mapping.position.y, mapping.position.z);
+            if (device.getDeviceWorldPos(id)) {
+              device.setPosition(id, pos);
+            } else {
+              const dev = editor.getDevice(id);
+              if (dev) device.addDevice(dev, mapping);
+            }
+          });
+          link.refreshPositionsFor(ids, (id) => device.getDeviceWorldPos(id));
+          _syncParticles();
+        },
+      ),
+    );
+
+    _watchStops.push(
       watch(
         () => ui.activeRootSpaceId,
         async () => {

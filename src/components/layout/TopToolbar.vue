@@ -106,6 +106,15 @@
       Background
     </button>
 
+    <button
+      :class="['btn', autoLayoutRunning ? 'btn-accent-on' : '']"
+      :disabled="ui.mode !== 'edit'"
+      @click="onAutoLayoutClick"
+      :title="autoLayoutRunning ? 'Cancel auto layout' : 'Force-directed placement for devices without a manual position'"
+    >
+      {{ autoLayoutRunning ? `Layout… ${autoLayoutPercent}% (cancel)` : "Auto Layout" }}
+    </button>
+
     <button class="btn" title="Reset view (F)" @click="resetCamera">
       ⌂ Home
     </button>
@@ -187,6 +196,22 @@ function toggleBackgroundPanel() {
   }
   ui.closeLeftDock();
   ui.showBackgroundPanel = true;
+}
+
+const autoLayoutRunning = computed(() => editor.autoLayoutProgress !== null);
+const autoLayoutPercent = computed(() => {
+  const p = editor.autoLayoutProgress;
+  if (!p || !p.iterations) return 0;
+  return Math.round((p.iteration / p.iterations) * 100);
+});
+
+async function onAutoLayoutClick() {
+  if (autoLayoutRunning.value) {
+    editor.cancelAutoLayout();
+    return;
+  }
+  await editor.autoLayout();
+  ui.addToast("Auto layout complete", "success");
 }
 </script>
 

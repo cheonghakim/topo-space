@@ -1,5 +1,5 @@
 import type {
-  ConnectionStatus, EditorMode, EditorOptions, EditorSnapshot, FilterState,
+  AutoLayoutOptions, ConnectionStatus, EditorMode, EditorOptions, EditorSnapshot, FilterState,
   NetworkInterface, NetworkLink, OperatorState, RawDevice, Space, Toast, VirtualNode,
 } from './types'
 
@@ -16,6 +16,14 @@ export interface NmsEditor {
   exportSnapshot: () => EditorSnapshot
   importSnapshot: (snapshot: EditorSnapshot) => void
   getDevice: (id: string) => Readonly<RawDevice> | undefined
+
+  // ── Auto layout ───────────────────────────────────────────────────────────
+  // Force-directed placement for devices lacking a manual position. Already-
+  // positioned devices are pinned in place (they still repel others) unless
+  // `includeMapped` is set. Devices sharing a space/rack pull together.
+  autoLayout: (options?: AutoLayoutOptions) => Promise<void>
+  /** Stops an in-flight autoLayout() run, leaving devices at their last computed positions. */
+  cancelAutoLayout: () => void
 
   // ── Backend push ──────────────────────────────────────────────────────────
   // Feed data from your own SNMP/syslog/NetFlow/whatever backend in. These

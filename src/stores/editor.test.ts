@@ -141,6 +141,28 @@ describe('backend push actions', () => {
     expect(editor.links.has('link-1')).toBe(false)
   })
 
+  it('linksRevision bumps on an in-place update, not just add/remove', () => {
+    const editor = useEditorStore()
+    lockDown(editor)
+
+    editor.upsertLinks([
+      { id: 'link-1', sourceDeviceId: 'a', targetDeviceId: 'b', type: 'physical', source: 'discovered', status: 'up' },
+    ])
+    const afterAdd = editor.linksRevision
+    expect(editor.links.size).toBe(1)
+
+    // Same id, same count — this used to be invisible to a `links.size` watcher.
+    editor.upsertLinks([
+      { id: 'link-1', sourceDeviceId: 'a', targetDeviceId: 'b', type: 'physical', source: 'discovered', status: 'down' },
+    ])
+    expect(editor.links.size).toBe(1)
+    expect(editor.linksRevision).toBeGreaterThan(afterAdd)
+
+    const afterUpdate = editor.linksRevision
+    editor.updateLinkStatus('link-1', 'up')
+    expect(editor.linksRevision).toBeGreaterThan(afterUpdate)
+  })
+
   it('upsertSpaces bypasses the guard; removeSpaces soft-deletes (archives) instead of removing', () => {
     const editor = useEditorStore()
     lockDown(editor)
@@ -239,5 +261,61 @@ describe('backend push actions', () => {
     editor.upsertLinks([{ id: 'link-1', sourceDeviceId: 'a', targetDeviceId: 'b', type: 'physical', source: 'discovered' }])
 
     expect(events).toEqual(['user', 'api'])
+  })
+})
+
+describe('autoLayout', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('is denied outside edit mode and touches nothing', async () => {
+    const editor = useEditorStore()
+    editor.replaceData({
+      devices: [{ id: 'dev-1', source: 'cmdb', externalId: 'dev-1', hostname: 'a' }],
+    })
+
+    await editor.autoLayout()
+
+    expect(editor.getMappingByDeviceId('dev-1')).toBeUndefined()
+  })
+
+  it('places an unmapped device while leaving an already-positioned one pinned', async () => {
+    const editor = useEditorStore()
+    editor.setEditorMode('edit')
+    editor.replaceData({
+      devices: [
+        { id: 'fixed', source: 'cmdb', externalId: 'fixed', hostname: 'fixed' },
+        { id: 'loose', source: 'cmdb', externalId: 'loose', hostname: 'loose' },
+      ],
+      deviceMappings: [
+        { id: 'map-fixed', rawDeviceId: 'fixed', mappingStatus: 'mapped', position: { x: 10, y: 0, z: 10 } },
+      ],
+      links: [
+        { id: 'link-1', sourceDeviceId: 'fixed', targetDeviceId: 'loose', type: 'physical', source: 'discovered' },
+      ],
+    })
+
+    await editor.autoLayout({ iterations: 20 })
+
+    // Pinned device never moves.
+    expect(editor.getMappingByDeviceId('fixed')?.position).toEqual({ x: 10, y: 0, z: 10 })
+    // The previously-unmapped device is now placed somewhere.
+    const loose = editor.getMappingByDeviceId('loose')
+    expect(loose?.mappingStatus).toBe('mapped')
+    expect(loose?.position).toBeDefined()
+    expect(editor.lastAutoLayoutDeviceIds).toEqual(['loose'])
+  })
+
+  it('cancelAutoLayout stops a run early without throwing', async () => {
+    const editor = useEditorStore()
+    editor.setEditorMode('edit')
+    editor.replaceData({
+      devices: Array.from({ length: 5 }, (_, i) => ({ id: `d${i}`, source: 'cmdb', externalId: `d${i}`, hostname: `d${i}` })),
+    })
+
+    const run = editor.autoLayout({ iterations: 1_000_000 })
+    editor.cancelAutoLayout()
+    await expect(run).resolves.toBeUndefined()
   })
 })

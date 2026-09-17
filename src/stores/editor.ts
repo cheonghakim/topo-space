@@ -7,9 +7,11 @@ import type {
   VirtualNode, BackgroundObject, SavedView, EditorSnapshot,
   EditorAction, EditorData, EditorMode, FeatureFlags,
   PermissionContext, PermissionResolver, OperatorState,
-  EditorEventPayload,
+  EditorEventPayload, AutoLayoutOptions, AutoLayoutProgress,
 } from '@/types'
 import { generateMockData } from '@/utils/mockDataGenerator'
+import { CpuForceLayout } from '@/layout/CpuForceLayout'
+import type { LayoutEdge, LayoutNode, LayoutRun } from '@/layout/types'
 
 export const useEditorStore = defineStore('editor', () => {
   // Permissive bootstrap defaults used until a host explicitly calls
@@ -39,6 +41,15 @@ export const useEditorStore = defineStore('editor', () => {
   const backgroundObjects = ref<Map<string, BackgroundObject>>(new Map())
   const savedViews      = ref<SavedView[]>([])
   const changeLog       = ref<{ id: string; type: string; msg: string; ts: string }[]>([])
+
+  // Progress of an in-flight autoLayout() run, or null when idle — a toolbar
+  // can watch this reactively for a progress bar / cancel button.
+  const autoLayoutProgress = ref<AutoLayoutProgress | null>(null)
+  let _autoLayoutRun: LayoutRun | null = null
+  // Device ids the last autoLayout() run actually repositioned. A fresh array
+  // reference each time it's set so the renderer-side composable can watch it
+  // (by identity) and sync only those devices instead of a full scene reload.
+  const lastAutoLayoutDeviceIds = ref<string[]>([])
 
   function configureSecurity(input: {
     mode?: EditorMode
@@ -784,6 +795,82 @@ export const useEditorStore = defineStore('editor', () => {
     return { devices: createdDevices.length, spaces: createdSpaces.length, links: createdLinks.length }
   }
 
+  function _layoutEdgeWeight(link: NetworkLink): number {
+    if (typeof link.bandwidth === 'number' && link.bandwidth > 0) {
+      // Compressed so a 10Gbps backbone link doesn't dwarf everything else —
+      // just enough to make higher-bandwidth links pull a bit harder.
+      return Math.min(3, Math.max(0.3, Math.log10(link.bandwidth + 10) / 2))
+    }
+    if (link.confidence === 'high') return 1.5
+    if (link.confidence === 'low') return 0.5
+    return 1
+  }
+
+  // Force-directed auto-layout. Devices that already have a manual position
+  // are pinned (they still push other nodes away, but never move themselves)
+  // unless `includeMapped` asks to re-lay-out everything; devices sharing a
+  // `primarySpaceId` (same rack/space) attract more strongly so a rack's
+  // devices settle together instead of scattering across the graph. Results
+  // are written back through the existing `mapDevice` action — no separate
+  // persistence path.
+  function autoLayout(options: AutoLayoutOptions = {}): Promise<void> {
+    if (!requirePermission('layout:update')) return Promise.resolve()
+    _autoLayoutRun?.cancel()
+
+    const targetIds = (options.deviceIds ?? [...devices.value.keys()]).filter(id => devices.value.has(id))
+    const idSet = new Set(targetIds)
+    const mappingByDevice = new Map<string, DeviceMapping>()
+    mappings.value.forEach(m => mappingByDevice.set(m.rawDeviceId, m))
+
+    const nodes: LayoutNode[] = targetIds.map(id => {
+      const mapping = mappingByDevice.get(id)
+      const hasPosition = !!mapping?.position
+      const pinned = hasPosition && !options.includeMapped
+      const start = hasPosition
+        ? { x: mapping!.position!.x, z: mapping!.position!.z }
+        : { x: (Math.random() - 0.5) * 40, z: (Math.random() - 0.5) * 40 }
+      return { id, x: start.x, z: start.z, pinned, clusterId: mapping?.primarySpaceId }
+    })
+
+    const edges: LayoutEdge[] = []
+    links.value.forEach(l => {
+      if (!idSet.has(l.sourceDeviceId) || !idSet.has(l.targetDeviceId)) return
+      edges.push({ sourceId: l.sourceDeviceId, targetId: l.targetDeviceId, weight: _layoutEdgeWeight(l) })
+    })
+
+    const iterations = options.iterations ?? 200
+    autoLayoutProgress.value = { iteration: 0, iterations }
+    const run = new CpuForceLayout().run(nodes, edges, { iterations }, (p) => {
+      autoLayoutProgress.value = { iteration: p.iteration, iterations: p.iterations }
+      options.onProgress?.(p.iterations ? p.iteration / p.iterations : 1)
+    })
+    _autoLayoutRun = run
+
+    return run.promise.then((positions) => {
+      if (_autoLayoutRun === run) _autoLayoutRun = null
+      autoLayoutProgress.value = null
+
+      const movedIds: string[] = []
+      nodes.forEach(n => {
+        if (n.pinned) return
+        const pos = positions.get(n.id)
+        if (!pos) return
+        const mapping = mappingByDevice.get(n.id)
+        mapDevice(n.id, mapping?.primarySpaceId ?? '', mapping?.slotIndex ?? 0,
+          { x: pos.x, y: mapping?.position?.y ?? 0, z: pos.z })
+        movedIds.push(n.id)
+      })
+      if (movedIds.length) {
+        logChange('layout.update', `Auto layout placed ${movedIds.length} device(s)`)
+        lastAutoLayoutDeviceIds.value = movedIds
+      }
+    })
+  }
+
+  function cancelAutoLayout() {
+    _autoLayoutRun?.cancel()
+  }
+
   function slug(s: string): string {
     return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'x'
   }
@@ -856,6 +943,7 @@ export const useEditorStore = defineStore('editor', () => {
     addSpace, updateSpace, archiveSpace,
     upsertSpaces, removeSpaces,
     mapDevice, unmapDevice, updateAnnotation, setVisualType,
+    autoLayout, cancelAutoLayout, autoLayoutProgress, lastAutoLayoutDeviceIds,
     acknowledgeDevice, unacknowledgeDevice, assignDevice, setOperatorState,
     addLink, updateLink, removeLink,
     upsertLinks, removeLinks,

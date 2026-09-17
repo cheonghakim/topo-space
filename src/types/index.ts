@@ -373,3 +373,19 @@ export interface LinkDraftState {
   active: boolean
   sourceDeviceId: string | null
 }
+
+// ─── Auto Layout ─────────────────────────────────────────────────────────────
+
+export interface AutoLayoutOptions {
+  /** Restrict the run to these device ids; defaults to every known device. */
+  deviceIds?: string[]
+  /** Re-lay-out devices that already have a manual position too, instead of
+   *  leaving them fixed in place. Default false. */
+  includeMapped?: boolean
+  /** Simulation iterations — higher settles further but takes longer. Default 200. */
+  iterations?: number
+  /** Called with a 0..1 completion fraction as the layout runs. */
+  onProgress?: (fraction: number) => void
+}
+
+export interface AutoLayoutProgress { iteration: number; iterations: number }

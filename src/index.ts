@@ -90,6 +90,8 @@ export function createNmsEditor(options: EditorOptions): NmsEditor {
     exportSnapshot: editor.exportSnapshot,
     importSnapshot: editor.importSnapshot,
     getDevice: editor.getDevice,
+    autoLayout: editor.autoLayout,
+    cancelAutoLayout: editor.cancelAutoLayout,
   }
 }
 
